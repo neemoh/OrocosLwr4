@@ -24,7 +24,6 @@ HapticACC::HapticACC(std::string const& name) :
 	this->addProperty("max_force", this->prop_F_MAX).doc("Number of samples per cycle of periodic motion.");
 	this->addProperty("dominant_hand", this->prop_dominant_hand).doc("Dominant hand of the user. 0 for Left. 1 for Right.");
 	this->addProperty("udp_send_pre_sample", this->prop_udp_send_pre_sample).doc("Dominant hand of the user. 0 for Left. 1 for Right.");
-
 	this->addProperty("udp_port", this->prop_local_port).doc("UDP socket");
 	this->addProperty("remote_address", this->prop_remote_addr).doc("remote IP address");
 
