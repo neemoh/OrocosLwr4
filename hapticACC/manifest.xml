@@ -1,0 +1,17 @@
+<package>
+    <description brief="Orocos hapticACC Component package">
+        This package contains the components of the hapticACC package
+    </description>
+    <!--NOTE: set the license and author before you publish this code-->
+    <license></license>
+    <author>Nima Enayati</author>
+    <depend package="rtt" />
+    <depend package="rtt_rosnode" />
+    <depend package="rtt_std_msgs"/>
+    <depend package="orocos_kdl" />
+    <depend package="rtt_geometry_msgs" />
+    <depend package="rtt_sensor_msgs" />
+    <depend package="tf" />
+    <depend package="tf_conversions" />
+</package>
+
