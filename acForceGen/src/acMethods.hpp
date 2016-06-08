@@ -50,10 +50,10 @@
 
 //==============================================================================
 /*!
-    \file       CCamera.h
+    \file       acMethods.hpp
 
     \brief
-    Implementation of a camera.
+    Dynamic active constraints methods
 */
 //==============================================================================
 
