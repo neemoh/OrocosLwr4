@@ -9,7 +9,6 @@ cmake_minimum_required(VERSION 2.6.3)
 # any cmake macro you see fit.
 #
 project(hapticACC)
-
 #
 # Do setup in case of ros package, If ROS_ROOT is set, it is
 # recommended to use RTT/OCL through the ros packages.

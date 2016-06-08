@@ -1,13 +1,59 @@
+//==============================================================================
 /*
- * acMethods.cpp
- *
- *  Created on: Jun 7, 2016
- *      Author: nearlab
- */
+    Software License Agreement (BSD License)
+    Copyright (c) 2016, Nearlab
+
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following
+    disclaimer in the documentation and/or other materials provided
+    with the distribution.
+
+    * Neither the name of nearlab nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+    FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+    BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+    ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+    \author    <http://nearlab.polimi.it/>
+    \author    Nima Enayati
+    \version   -
+*/
+//==============================================================================
+
+//------------------------------------------------------------------------------
+
 #include "acMethods.hpp"
 
 using namespace toolbox;
 
+
+//-----------------------------------------------------------------------
+// SIMULATED PLASTICY INTRODUCED BY KIKUUWE ET AL. 2008
+//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
+// Constructor
+//-----------------------------------------------------------------------
 acPlast::acPlast(double F_MAX_in, double ELASTIC_LENGTH_in, double BOUNDARY_THRESHOLD_in){
 	F_MAX 				= F_MAX_in;
 	ELASTIC_LENGTH 		= ELASTIC_LENGTH_in;
@@ -17,6 +63,10 @@ acPlast::acPlast(double F_MAX_in, double ELASTIC_LENGTH_in, double BOUNDARY_THRE
 
 }
 
+//-----------------------------------------------------------------------
+// FORCE GENERATION FOLLOWING THE EQUATIONS DESCRIBED IN THE
+// CORRESPONDING PAPER
+//-----------------------------------------------------------------------
 
 void acPlast::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd){
 
@@ -63,8 +113,12 @@ void acPlast::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL:
 }
 
 
-//##################################################################################################
-// BOWYER
+//-----------------------------------------------------------------------
+// PLASTIC WITH MOTION REDIRECTION - INTRODUCED BY BOWYER ET AL. 2013
+//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
+// Constructor
+//-----------------------------------------------------------------------
 acPlastRedirect::acPlastRedirect(double F_MAX_in, double ELASTIC_LENGTH_in, double BOUNDARY_THRESHOLD_in){
 
 	F_MAX = F_MAX_in;
@@ -75,13 +129,16 @@ acPlastRedirect::acPlastRedirect(double F_MAX_in, double ELASTIC_LENGTH_in, doub
 
 }
 
-
+//-----------------------------------------------------------------------
+// FORCE GENERATION FOLLOWING THE EQUATIONS DESCRIBED IN THE
+// CORRESPONDING PAPER
+//-----------------------------------------------------------------------
 void acPlastRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd){
 
 	double sig2 = 2.5;
 	double fc = F_MAX;
 	double theta = 0.4;
-	double sig0 = fc/0.003;
+	double sig0 = fc/ELASTIC_LENGTH;
 	double zcss = fc/sig0;
 	KDL::Vector penet = p_tool - p_desired;
 
@@ -121,9 +178,13 @@ void acPlastRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, co
 }
 
 
-//##############################################################################################################
 
-
+//-----------------------------------------------------------------------
+// VISCOUSE WITH REDIRECTION - INTRODUCED BY ENAYATI ET AL. 2016
+//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
+// Constructor
+//-----------------------------------------------------------------------
 acViscousRedirect::acViscousRedirect(double F_MAX_in, double B_MAX_in, double BOUNDARY_THRESHOLD_in){
 
 	F_MAX = F_MAX_in;
@@ -135,6 +196,10 @@ acViscousRedirect::acViscousRedirect(double F_MAX_in, double B_MAX_in, double BO
 
 }
 
+//-----------------------------------------------------------------------
+// FORCE GENERATION FOLLOWING THE EQUATIONS DESCRIBED IN THE
+// CORRESPONDING PAPER
+//-----------------------------------------------------------------------
 
 void acViscousRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd){
 	// UPPERCASE NAMES = SCALARS
@@ -156,7 +221,6 @@ void acViscousRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, 
 	double PENET =vec_norm(penet);
 
 	if (PENET< BOUNDARY_THRESHOLD){
-		//			PENET = 0;
 		B_M =  B_MAX * PENET/ BOUNDARY_THRESHOLD;
 	}
 	else
