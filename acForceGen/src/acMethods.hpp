@@ -80,11 +80,20 @@
 class ac{
 
 public:
+
+	//! virtual destructor
 	virtual ~ac(){}
+
+	//! pure virtual function for the calculation of the force.
 	virtual void getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd) =0;
 
+	//! Sets the maximum force of the constraint method
 	void setFmax(double in){F_MAX=in;}
+
+	//! Sets the boundary threshold  (if applicable) of the constraint method
 	void setBoundaryThreshold(double in){BOUNDARY_THRESHOLD=in;}
+
+	//! Sets the elastic length (if applicable)  of the constraint method
 	void setElasticLength(double in){ELASTIC_LENGTH=in;}
 
 protected:
@@ -104,9 +113,11 @@ protected:
 //-----------------------------------------------------------------------
 class acPlast: public ac{
 public:
-	// the constructor
+
+	//! the constructor
 	acPlast(double F_MAX, double ELASTIC_LENGTH, double BOUNDARY_THRESHOLD);
-	// This method calculates the force
+
+	//! This method calculates the force
 	void getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd);
 
 private:
@@ -123,9 +134,10 @@ private:
 class acPlastRedirect: public ac{
 public:
 
-	// the constructor
+	//! the constructor
 	acPlastRedirect(double F_MAX, double ELASTIC_LENGTH, double BOUNDARY_THRESHOLD);
-	// This method calculates the force
+
+	//! This method calculates the force
 	void getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd);
 
 private:
@@ -143,16 +155,17 @@ private:
 class acViscousRedirect: public ac{
 public:
 
-	// the constructor
+	//! the constructor
 	acViscousRedirect(double F_MAX, double B_MAX, double BOUNDARY_THRESHOLD);
-	// This method calculates the force
+
+	//! This method calculates the force
 	void getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd);
 	void setMaxViscousity(double in){B_MAX=in;}
 
 private:
-	// the maximum viscosity coefficient
+	//! the maximum viscosity coefficient
 	double B_MAX;
-	// internal variable the method needs to keep a track of
+	//! internal variable the method needs to keep a track of
 	KDL::Vector f_dir_last;
 	KDL::Vector v_dir_last;
 	KDL::Vector n_2_last;
