@@ -1,0 +1,18 @@
+<package>
+	<description brief="Orocos teleop Component package">
+        	This package contains the components of the teleop package
+	</description>
+	<!--NOTE: set the license and author before you publish this code-->
+	<license></license>
+	<author>Nima Enayati</author>
+	<depend package="rtt" />
+	<depend package="rtt_geometry_msgs" />
+	<depend package="rtt_sensor_msgs" />
+	<depend package="rtt_motion_control_msgs"/>
+	<depend package="kdl"/>
+	<depend package="tf_conversions" />
+        <depend package="kuka_lwr_fri"/>
+        <depend package="lwr_fri"/>
+
+</package>
+
