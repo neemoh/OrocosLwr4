@@ -1,0 +1,24 @@
+<package>
+  <description brief="HISigma">
+
+     HISigma
+
+  </description>
+  <author>NimaEnayati</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/HISigma</url>
+  <depend package="rospy"/>
+  <depend package="roscpp"/>
+  <depend package="tf_conversions"/>
+  <depend package="rtt_std_msgs"/>
+  <depend package="rtt_geometry_msgs"/>   
+  <depend package="rtt_sensor_msgs"/> 
+<!--
+  <depend package="kdl_typekit"/>
+  <depend package="kdl"/>
+-->
+
+</package>
+
+
