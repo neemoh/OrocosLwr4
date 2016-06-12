@@ -996,7 +996,6 @@ void Teleop::updateHook(){
 		else if(fabs(this->dt_loop_msrd -this->dt)>0.0009)
 			log(RTT::Warning) << "ATTENTION! The FRI frequency seems to be different from what I have been told!!!" << endlog();
 
-
 		for (unsigned int iter=0; iter < this->num_cart_p_var; iter++){
 			this->slv_cart.v_curr.at(iter) = (this->slv_cart.q_cmd.at(iter) - this->slv_cart.q_cmd_last.at(iter)) / this->dt;
 		}
