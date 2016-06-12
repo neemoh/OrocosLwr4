@@ -60,6 +60,9 @@ public:
 
 	bool clipToLimits(std::vector<double>& vars, std::vector<double> min_limits, std::vector<double> max_limits) ;
 
+	void startPalpation();
+	void stopPalpation();
+
 private:
 
 	bool motionOn;
@@ -69,6 +72,11 @@ private:
 	bool new_joint_dest;
 	bool clutch_first_time;
 
+//----------------------------------------- TEMP PALPATIOn
+	std::vector<double> palp_cart_destination;
+	bool palpation_on;
+	bool palpation_first_time;
+	int palp_point_status;
 
 	//******************************************  Temporary variables
 	motion_control_msgs::JointPositions tmp_joint_pos;
@@ -103,7 +111,8 @@ private:
 	double T_joint;
 
 	RTT::os::TimeService::ticks time_init, time_last, time_last2;
-	double dt, dt_real, dt2; 											//dt is set as a property, dt_real is estimated at each cycle.
+	double dt, dt_loop_msrd, dt_computation; 											//dt is set as a property, dt_real is estimated at each cycle.
+	unsigned int dt_counter;
 	unsigned int interp_counter;										//Counter is used for PTP interpolator instead of dt_real
 
 	//******************************************  Tracking and teleop variables
@@ -154,6 +163,7 @@ protected:
 	std::vector<double> slv_jnt_v_max_prop, slv_jnt_a_max_prop;					// Vector with the maximum acceleration of each variable
 	std::vector<double> slv_jnt_home_prop;
 	std::vector<double> master_to_base_frame_prop, fs_to_ee_frame_prop, master_to_tool_orient_frame_prop;
+	std::vector<double> palpation_init_6dpose_prop;
 
 	double period_prop;
 	RTT::InputPort<geometry_msgs::Pose> 					cart_dest_port;		// DataPort containing the current pose

@@ -17,7 +17,7 @@ bool variableInterpolator(const std::vector<double> xTargetI, std::vector<double
 		double> xMaxI, const std::vector<double> vMaxI, const std::vector<double> aMaxI, bool& target_reached, const double dt) {
 
 	// Interpolates a vector of variables: from xLastI with vLastI it calculates the next point xNowI and velocity vNowI towards the target xTargetI to be reached within one time frame time_frame, under the constraint of xMaxI, xMinI, vMaxI, aMaxI
-	unsigned int interpolation_mode = 1;
+	unsigned int interpolation_mode = 0;
 
 	size_t num_var = xTargetI.size();
 	double TARGETTOLERANCE = 0.000001;

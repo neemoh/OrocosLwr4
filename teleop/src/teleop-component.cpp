@@ -51,6 +51,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addProperty("tr_master_to_base", 			this->master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
 	this->addProperty("tr_fs_to_ee", 				this->fs_to_ee_frame_prop).doc("Rigid transformation (quaternion) from force sensor to the endeffector. (Attention to x,y,z,w order).");
 	this->addProperty("tr_master_to_tool_orient", 	this->master_to_tool_orient_frame_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
+	this->addProperty("palpation_init_6dpose", 	    this->palpation_init_6dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 
 	this->addOperation("motionON", 					&Teleop::startMotion, 				this).doc("Starts the motion mode");
 	this->addOperation("motionOff", 			    &Teleop::stopMotion, 				this).doc("Stops the motion");
@@ -65,6 +66,10 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addOperation("positionCoupling", 			&Teleop::positionCoupling, 			this).doc("Switches the master/slave coupling of position. On or Off");
 	this->addOperation("orientationCoupling", 		&Teleop::orientationCoupling,		this).doc("Switches the master/slave coupling of orientation. On or Off");
 
+	this->addOperation("startPalpation", 		&Teleop::startPalpation,		this).doc("Switches the master/slave coupling of orientation. On or Off");
+	this->addOperation("stopPalpation", 		&Teleop::stopPalpation,		this).doc("Switches the master/slave coupling of orientation. On or Off");
+
+
 	this->num_axes 				= 7;
 	this->num_joints			= 7;
 	this->num_cart_p_var 		= 3; //x,y and z
@@ -75,9 +80,10 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->time_last2 			= 0.0;
 	this->T_joint				= 0.0;
 	this->time_init				= 0.0;
-	this->dt_real				= 0.0;
+	this->dt_loop_msrd			= 0.0;
 	this->dt					= 0.0;
-	this->dt2					= 0.0;
+	this->dt_computation		= 0.0;
+	this->dt_counter 			= 0;
 	this->interp_counter 		= 0;
 	this->motion_mode			= 0;
 	this->force_bias_counter	= 0;
@@ -99,6 +105,14 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->force_bias_computed	= false;
 	this->force_filter_on		= false;
 	mstr_to_slv_frame.Identity();
+
+	//---------------------------------- Temp Palpation
+	this->palp_cart_destination = vec_dbl(3,0.0);
+	this->palpation_first_time= 0;
+	this->palp_point_status = 0 ;
+	this->palpation_on = false;
+	//---------------------------------- Temp Palpation
+
 
 	std::cout << "Teleop constructed!" <<std::endl;
 }
@@ -274,7 +288,9 @@ void Teleop::updateHook(){
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//														Reading data
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+	double palp_area_l = 0.05;
+	double palp_area_h = 0.1;
+	double palp_area_d = 0.002;
 	this->time_last2 = os::TimeService::Instance()->getTicks();
 
 	///////////////////////////////////////////
@@ -368,6 +384,62 @@ void Teleop::updateHook(){
 			// Trapezoidal velocity profile.
 			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+			///////////////////// TEMP PALPATION
+			//-------------------------------------------------------------------------------------------------------------------
+			if(this->palpation_on){
+				if(this->palpation_first_time){
+					this->palp_cart_destination = this->palpation_init_6dpose_prop;
+					setPTPCartDestination(this->palp_cart_destination);
+					this->palpation_first_time = false;
+				}
+
+				if (this->destination_reached){
+					if (this->palp_cart_destination[1]< (this->palpation_init_6dpose_prop[1] + palp_area_h)){
+						switch (this->palp_point_status){
+
+						case 0 :
+
+							this->palp_cart_destination[0] += palp_area_l;
+							this->palp_point_status++;
+							break;
+						case 1:
+
+							this->palp_cart_destination[1] += palp_area_d;
+							this->palp_point_status++;
+							break;
+
+						case 2:
+
+							this->palp_cart_destination[0] -= palp_area_l;
+							this->palp_point_status++;
+							break;
+						case 3:
+
+							this->palp_cart_destination[1] += palp_area_d;
+							this->palp_point_status = 0;
+							break;
+
+
+						default:
+							break;
+						}
+//						cout << "this->palp_cart_destination: " << this->palp_cart_destination << endl;
+						setPTPCartDestination(this->palp_cart_destination);
+
+					}
+
+				}
+
+
+			}
+
+
+
+
+			//-------------------------------------------------------------------------------------------------------------------
+			///////////////////// TEMP PALPATION
+
+
 			if (!this->destination_reached){
 
 				///////////////////////////////////////////
@@ -377,7 +449,7 @@ void Teleop::updateHook(){
 				vec_dbl cart_6d_min   = vec_dbl(6,-2.0);
 				vec_dbl cart_6d_max   = vec_dbl(6,2.0);
 				vec_dbl cart_6d_v_max   = vec_dbl(6,0.2);
-				vec_dbl cart_6d_a_max   = vec_dbl(6,0.2);
+				vec_dbl cart_6d_a_max   = vec_dbl(6,0.1);
 
 				cart_6d_a_max[0] = this->slv_cart.a_max[0];
 				cart_6d_a_max[1] = this->slv_cart.a_max[1];
@@ -458,7 +530,6 @@ void Teleop::updateHook(){
 						//							this->trackingSupervisor(this->slv_jnt.q_cmd, this->slv_jnt.q_dest, this->slv_jnt.q_cmd_last ,this->slv_jnt.v_curr, this->slv_jnt.v_max, this->slv_jnt.a_max, this->dt);
 						this->slv_jnt.q_cmd = this->slv_jnt.q_dest;
 						this->destination_reached = false;
-
 					}
 					else {
 						log(RTT::Warning) << "No good pose of the robot; no solution of the inverse kinematics: due to bad target or bad configuration or bad nullspace parameter" << endlog();
@@ -878,7 +949,7 @@ void Teleop::updateHook(){
 			bool psi_flag_temp = 0;
 			//				if(psi_cmd- this->psi_last[0] >  psi_cmd_step)	psi_cmd = this->psi_last[0] + psi_cmd_step;
 			//				if(psi_cmd- this->psi_last[0] < -psi_cmd_step)	psi_cmd = this->psi_last[0] - psi_cmd_step;
-			variableInterpolator(psi_chosen, psi_last, this->psi_v_last, psi_cmd,
+			variableInterpolator(psi_chosen, this->psi_last, this->psi_v_last, psi_cmd,
 					this->psi_v_cmd,  psi_q_min, psi_q_max ,psi_v_max, psi_a_max, psi_flag_temp, this->dt) ;
 
 			//				cout << "psi_chosen " <<  psi_chosen <<" psi_last " << this->psi_last << "  cmd " << psi_cmd << endl;
@@ -889,6 +960,7 @@ void Teleop::updateHook(){
 //			cout << "psi_cmd" << psi_cmd << endl;
 			this->psi_last = psi_cmd;
 			this->psi_v_last = this->psi_v_cmd;
+
 
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			//Inverse Kinematics
@@ -916,8 +988,14 @@ void Teleop::updateHook(){
 		//Estimate Cartesian velocity of the robot
 		///////////////////////////////////////////////////////////////////////////////////////
 
-		this->dt_real = os::TimeService::Instance()->secondsSince(this->time_last);
+		this->dt_loop_msrd = os::TimeService::Instance()->secondsSince(this->time_last);
 		this->time_last = os::TimeService::Instance()->getTicks();
+		//measure the loop frequency after a couple of runs
+		if(this->dt_counter <= 2)
+			this->dt_counter++;
+		else if(fabs(this->dt_loop_msrd -this->dt)>0.0009)
+			log(RTT::Warning) << "ATTENTION! The FRI frequency seems to be different from what I have been told!!!" << endlog();
+
 
 		for (unsigned int iter=0; iter < this->num_cart_p_var; iter++){
 			this->slv_cart.v_curr.at(iter) = (this->slv_cart.q_cmd.at(iter) - this->slv_cart.q_cmd_last.at(iter)) / this->dt;
@@ -925,11 +1003,11 @@ void Teleop::updateHook(){
 		for (unsigned int iter=0; iter < this->num_joints; iter++){
 			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->dt;
 		}
-		this->dt2 = os::TimeService::Instance()->secondsSince(this->time_last2);
+		this->dt_computation = os::TimeService::Instance()->secondsSince(this->time_last2);
 
 		conversions::vectorToVector3(this->slv_jnt.v_curr, this->tmp_vec3);
-		//		this->tmp_vec3.y= this->dt_real*1000;
-		//		this->tmp_vec3.z= this->dt2*1000;
+		//		this->tmp_vec3.y= this->dt_loop_msrd*1000;
+		//		this->tmp_vec3.z= this->dt_computation*1000;
 		this->joint_vel_port.write(this->tmp_vec3);
 		conversions::vec3Reset(tmp_vec3);
 
@@ -1405,227 +1483,13 @@ bool Teleop::P2PInterpolator(const vec_dbl p_dest, const vec_dbl p_init, vec_dbl
 }
 
 
-
-
-///------------------------------------------------------------------------------------------------------------------------------------
-//bool Teleop::calculateFK(std::vector<double> jointValues, unsigned int & rconfiguration, double & nsparam, KDL::Frame &this->targetmatrix, KDL::Vector& elbow_tangent) {
-//
-//	std::vector<std::vector<double> > dh;
-//
-//	dh.clear();
-//	std::vector<double> singlelink;
-//	singlelink.push_back(jointValues[0]);
-//	singlelink.push_back(this->limbs[0]);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(M_PI / 2);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//	singlelink.push_back(jointValues.at(1));
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(-M_PI / 2);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//	singlelink.push_back(jointValues.at(2));
-//	singlelink.push_back(this->limbs[1]);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(-M_PI / 2);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//	singlelink.push_back(jointValues.at(3));
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(M_PI / 2);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//	singlelink.push_back(jointValues.at(4));
-//	singlelink.push_back(this->limbs[2]);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(M_PI / 2);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//	singlelink.push_back(jointValues.at(5));
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(-M_PI / 2);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//	singlelink.push_back(jointValues.at(6));
-//	singlelink.push_back(this->limbs[3]);
-//	singlelink.push_back(0.0);
-//	singlelink.push_back(0);
-//	dh.push_back(singlelink);
-//	singlelink.clear();
-//
-//	rconfiguration = ((int) (jointValues.at(1) < 0)) + (2 * ((int) (jointValues.at(3) < 0))) + (4 * ((int) (jointValues.at(5) < 0)));
-//	std::vector<KDL::Frame> linkMatrices(this->num_axes + 1, KDL::Frame::Identity());
-//
-//	//jointValues = deg2rad(jointValues);
-//
-//	for (unsigned int linkIter = 1; linkIter < (this->num_axes + 1); linkIter++) {
-//		KDL::Vector linkTmpVec = KDL::Vector::Zero();
-//		KDL::Rotation linkTmpRot = KDL::Rotation::Identity();
-//		linkTmpVec = KDL::Vector(dh.at(linkIter - 1).at(2) * cos(dh.at(linkIter - 1).at(0)), dh.at(linkIter - 1).at(2) * sin(dh.at(linkIter - 1).at(0)), dh.at(linkIter - 1).at(1));
-//		linkTmpRot
-//		= KDL::Rotation(cos(dh.at(linkIter - 1).at(0)), -sin(dh.at(linkIter - 1).at(0)) * cos(dh.at(linkIter - 1).at(3)), sin(dh.at(linkIter - 1).at(0)) * sin(dh.at(linkIter - 1).at(3)), sin(dh.at(linkIter - 1).at(0)), cos(dh.at(linkIter
-//				- 1).at(0)) * cos(dh.at(linkIter - 1).at(3)), -cos(dh.at(linkIter - 1).at(0)) * sin(dh.at(linkIter - 1).at(3)), 0.0, sin(dh.at(linkIter - 1).at(3)), cos(dh.at(linkIter - 1).at(3)));
-//		linkMatrices.at(linkIter) = KDL::Frame(linkTmpRot, linkTmpVec);
-//		linkMatrices.at(linkIter) = linkMatrices.at(linkIter - 1) * linkMatrices.at(linkIter);
-//
-//	}
-//	KDL::Vector xs = linkMatrices.at(1).p;
-//	KDL::Vector xe = linkMatrices.at(3).p;
-//	KDL::Vector xw = linkMatrices.at(5).p;
-//
-//
-//	KDL::Vector xsw = xw - xs;
-//	KDL::Vector xse = xe - xs;
-//
-//	KDL::Vector usin = KDL::Vector(0.0, 0.0, 1.0) * xsw;
-//	usin.Normalize();
-//	KDL::Vector ucos = xsw * usin;
-//	ucos.Normalize();
-//
-//	// Nima: added negative sign so that the rotation of nsparam is around the vector from soulder to wrist.
-//	nsparam = -((double) atan2(dot(xse, usin), dot(xse, ucos)));
-//
-//	KDL::Vector xew = xw - xe; // Elbow to wrist
-//	KDL::Vector xes = xs - xe; // Elbow to shoulder
-//	elbow_tangent = xes * xew; // Tangent vector
-//	elbow_tangent.Normalize();
-//
-//
-//	//std::cout << "Sizes " << linkMatrices.size() << " " << this->j_num << std::endl;
-//	//targetmatrix = linkMatrices.back();
-//	targetmatrix = linkMatrices.at(this->num_joints); //First matrix is identity
-//
-//	linkMatrices.clear();
-//	return true;
-//}
-//
-//
-///------------------------------------------------------------------------------------------------------------------------------------
-bool Teleop::calculateIK(KDL::Frame targetmatrix, const unsigned int rconfiguration, double nsparam, std::vector<double>& jointValues) {
-
-
-	// Analitical inverse kinematics calculation
-	/*if (!this->isTargetSet()) {
-         log(RTT::Warning) << "No target was set: set a target matrix before." << endlog();
-         return false;
-         }*/
-
-	jointValues.clear();
-
-	std::vector<double> outval(this->num_axes, 0.0);
-
-
-	//nsparam = deg2rad(nsparam);
-
-	//KDL::Frame targetmatrix = this->targetMatrix;
-
-	KDL::Frame mfw(KDL::Vector(0.0, 0.0, -this->limbs[3])); // wrist pose in flange coordinates
-
-	KDL::Frame mw = targetmatrix * mfw; // wrist pose
-	KDL::Vector xw = mw.p; // wrist target pos
-	KDL::Vector xs(0.0, 0.0, this->limbs[0]); // shoulder pos
-
-	KDL::Vector xf = targetmatrix.p; // flange pos
-
-	KDL::Vector xsw = xw - xs; // vector from shoulder to wrist
-	double lsw = xsw.Norm(); // distance between shoulder and wrist
-	KDL::Vector usw = xsw / lsw; // unit vector from shoulder to wrist
-	// KDL::Vector usw = xsw;		// unit vector from shoulder to wrist
-	usw.Normalize();
-	if ((lsw > (this->limbs[1] + this->limbs[2])) || (lsw < fabs(this->limbs[1] - this->limbs[2]))) { // no config possible, target out of reach (too far or oo close)
-		log(RTT::Warning) << "Target too far or too close" << endlog();
-		return false;
-	}
-	else { // finding the position of the elbow:
-		KDL::Vector xwf = xf - xw; // vector from wrist to flange
-		double cosphi = (pow(lsw, 2.0) + pow(this->limbs[1], 2.0) - pow(this->limbs[2], 2.0)) / (2.0 * lsw * this->limbs[1]); // cos of elbow angle
-		double lseproj = cosphi * this->limbs[1]; // distance from shoulder to elbow projected on the line from shoulder to wrist
-		double hse = sqrt(pow(this->limbs[1], 2.0) - pow(lseproj, 2.0)); // distance between elbow and shoulder - wrist - line
-		KDL::Vector xeproj = xs + usw * lseproj; // elbow position projected on the shoulder - wrist - line
-		// ( = point around which the elbow can rotate)
-
-		// direction vectors of the plane in which the elbow can rotate:
-		KDL::Vector usin = KDL::Vector(0.0, 0.0, 1.0) * xsw;
-		usin.Normalize();
-		KDL::Vector ucos = xsw * usin;
-		ucos.Normalize();
-
-
-		// actual elbow point
-		KDL::Vector xe = xeproj + (cos(nsparam) * ucos + sin(nsparam) * usin) * hse;
-		KDL::Vector xse = xe - xs;
-		KDL::Vector xew = xw - xe;
-
-
-		// joint axes
-		KDL::Vector axs = xse * KDL::Vector(0.0, 0.0, 1.0);
-		axs.Normalize();
-		KDL::Vector axe = xew * xse;
-		axe.Normalize();
-		KDL::Vector axw = xwf * xew;
-		axw.Normalize();
-		KDL::Vector axf = -targetmatrix.M.UnitY();
-
-
-		// axes perpend. to joint axes and to a vector along the next link
-		KDL::Vector axns = axs * xse;
-		axns.Normalize();
-		KDL::Vector axne = axe * xew;
-		axne.Normalize();
-		KDL::Vector axnw = axw * xwf;
-		axnw.Normalize();
-		//KDL::Vector axnf = targetmatrix.M.UnitX();
-
-		// joint angles
-		outval.at(0) = ((double) (atan2((double) dot(axs, KDL::Vector(-1.0, 0.0, 0.0)), (double) dot(axs, KDL::Vector(0.0, 1.0, 0.0)))));
-		outval.at(1) = ((double) (acos((double) ((((double) dot(xs, xse)) / ((double) this->limbs[0])) / ((double) this->limbs[1])))));
-		outval.at(2) = ((double) (atan2((double) dot(axe, axns), (double) -dot(axe, axs))));
-		outval.at(3) = ((double) (acos((double) ((((double) dot(xse, xew)) / ((double) this->limbs[1])) / ((double) this->limbs[2])))));
-		outval.at(4) = ((double) (atan2((double) dot(axw, axne), (double) -dot(axw, axe))));
-		outval.at(5) = ((double) (acos((double) ((((double) dot(xew, xwf)) / ((double) this->limbs[2])) / ((double) this->limbs[3])))));
-		outval.at(6) = ((double) (atan2(-dot(axf, -axnw), dot(axf, -axw))));
-
-
-		// invert joints according to the selected config
-		if ((rconfiguration & 1) > 0) {
-			outval.at(1) = -outval.at(1);
-			outval.at(0) = outval.at(0) + M_PI;
-			outval.at(2) = outval.at(2) + M_PI;
-		}
-		if ((rconfiguration & 2) > 0) {
-			outval.at(3) = -outval.at(3);
-			outval.at(2) = outval.at(2) + M_PI;
-			outval.at(4) = outval.at(4) + M_PI;
-		}
-		if ((rconfiguration & 4) > 0) {
-			outval.at(5) = -outval.at(5);
-			outval.at(4) = outval.at(4) + M_PI;
-			outval.at(6) = outval.at(6) + M_PI;
-		}
-
-		// modulo - ize angles so they are all between - pi and pi
-		for (unsigned int iter = 0; iter < this->num_axes; iter += 2) {
-			while (outval.at(iter) > M_PI) {
-				outval.at(iter) -= (2.0 * M_PI);
-			}
-			while (outval.at(iter) < -M_PI) {
-				outval.at(iter) += (2.0 * M_PI);
-			}
-		}
-		for (unsigned int iter = 0; iter < this->num_axes; iter++) {
-			outval.at(iter) *= (fabs(outval.at(iter)) > TOLERANCE);
-		}
-
-	}
-
-	jointValues = outval; //rad2deg(outval);
-	return true;
-
+void Teleop::startPalpation(){
+	this->palpation_on = true;
+	this->palpation_first_time = true;
 }
 
-
+void Teleop::stopPalpation(){
+	this->palpation_on = false;
+	this->palpation_first_time = false;
+}
 ORO_CREATE_COMPONENT(Teleop)
