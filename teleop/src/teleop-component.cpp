@@ -1037,12 +1037,72 @@ void Teleop::cleanupHook() {
 
 
 
+//-------------------------------------------------------------------------------------
+// freqObserver constructor
+//-------------------------------------------------------------------------------------
+freqObserver::freqObserver(double _dt_param, unsigned int _dt_init_steps, unsigned int _avg_steps){
+
+	dt_param=_dt_param;
+	dt_init_steps= _dt_init_steps;
+	avg_steps = _avg_steps;
+	//initializing the measured values with the nominal one
+	dt_msrd_avg=_dt_param;
+	dt_msrd_last=_dt_param;
+	t_computation=0;
+
+	dt_init_counter=0;
+	computation_time_from = 0;
+	loop_time_from = 0;
+
+}
+
+//-------------------------------------------------------------------------------------
+// freqObserver check the frequency
+//-------------------------------------------------------------------------------------
+void freqObserver::check(){
+
+	if(dt_init_counter <=  dt_init_steps){
+		dt_init_counter++;
+		loop_time_from = os::TimeService::Instance()->getTicks();
+	}
+	else{
+
+		dt_msrd_last = os::TimeService::Instance()->secondsSince(loop_time_from);
+		loop_time_from = os::TimeService::Instance()->getTicks();
+
+		dt_msrd_avg-= dt_msrd_avg/avg_steps;
+		dt_msrd_avg+= dt_msrd_last/avg_steps;
+
+		// Warn if the average measured loop time is more than %10 different than the expected
+		if(fabs(dt_msrd_avg - dt_param)> dt_param/10)
+			log(RTT::Warning) << "ATTENTION! Frequency inconsistency!! My average loop time is:"<< dt_msrd_avg << " While I expect: "<< dt_param << endlog();
+	}
+
+
+}
 /*
 /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
-////// ******************************************** FUNCTIONS *************************************************\\\\\\\\\
+////// ************************************** Teleop FUNCTIONS *************************************************\\\\\\\\\
 /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
  */
 ///------------------------------------------------------------------------------------------------------------------------------------
+
+
+void Teleop::startPalpation(){
+	this->palpation_on = true;
+	this->changeMotionMode(2);
+	this->palpation_first_time = true;
+}
+
+void Teleop::stopPalpation(){
+	this->palpation_on = false;
+	this->palpation_first_time = false;
+	this->palp_point_status = 0;
+	this->destination_reached = true;
+	this->changeMotionMode(1);
+	this->setPTPCartDestination(this->palpation_home_3dpose_prop);
+}
+
 
 bool Teleop::startMotion() {
 	Logger::In in(this->getName());
@@ -1478,63 +1538,4 @@ bool Teleop::P2PInterpolator(const vec_dbl p_dest, const vec_dbl p_init, vec_dbl
 }
 
 
-void Teleop::startPalpation(){
-	this->palpation_on = true;
-	this->changeMotionMode(2);
-	this->palpation_first_time = true;
-}
-
-void Teleop::stopPalpation(){
-	this->palpation_on = false;
-	this->palpation_first_time = false;
-	this->palp_point_status = 0;
-	this->destination_reached = true;
-	this->changeMotionMode(1);
-	this->setPTPCartDestination(this->palpation_home_3dpose_prop);
-}
-
-
-//-------------------------------------------------------------------------------------
-// freqObserver constructor
-//-------------------------------------------------------------------------------------
-freqObserver::freqObserver(double _dt_param, unsigned int _dt_init_steps, unsigned int _avg_steps){
-
-	dt_param=_dt_param;
-	dt_init_steps= _dt_init_steps;
-	avg_steps = _avg_steps;
-	//initializing the measured values with the nominal one
-	dt_msrd_avg=_dt_param;
-	dt_msrd_last=_dt_param;
-	t_computation=0;
-
-	dt_init_counter=0;
-	computation_time_from = 0;
-	loop_time_from = 0;
-
-}
-
-//-------------------------------------------------------------------------------------
-// freqObserver check the frequency
-//-------------------------------------------------------------------------------------
-void freqObserver::check(){
-
-	if(dt_init_counter <=  dt_init_steps){
-		dt_init_counter++;
-		loop_time_from = os::TimeService::Instance()->getTicks();
-	}
-	else{
-
-		dt_msrd_last = os::TimeService::Instance()->secondsSince(loop_time_from);
-		loop_time_from = os::TimeService::Instance()->getTicks();
-
-		dt_msrd_avg-= dt_msrd_avg/avg_steps;
-		dt_msrd_avg+= dt_msrd_last/avg_steps;
-
-		// Warn if the average measured loop time is more than %10 different than the expected
-		if(fabs(dt_msrd_avg - dt_param)> dt_param/10)
-			log(RTT::Warning) << "ATTENTION! Frequency inconsistency!! My average loop time is:"<< dt_msrd_avg << " While I expect: "<< dt_param << endlog();
-	}
-
-
-}
 ORO_CREATE_COMPONENT(Teleop)

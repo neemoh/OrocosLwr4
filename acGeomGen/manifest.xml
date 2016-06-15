@@ -1,0 +1,14 @@
+<package>
+    <description brief="Orocos acGeomGen Component package">
+        This package contains the components of the acGeomGen package
+    </description>
+    <!--NOTE: set the license and author before you publish this code-->
+    <license></license>
+    <author>Unknown Author</author>
+    <depend package="rtt" />
+    <depend package="rtt_rosnode" />
+    <depend package="rtt_std_msgs"/>
+    <depend package="orocos_kdl" />
+    <depend package="rtt_geometry_msgs" />
+</package>
+
