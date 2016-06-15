@@ -244,7 +244,7 @@ void sigma7::lockOrientation(){
 	drdRegulateRot  (true);
 	drdRegulateGrip (false);
 	drdStart();
-	drdMoveToRot (this->lock_orientation[0], this->lock_orientation[1],this->lock_orientation[2]);
+	drdMoveToRot(this->lock_orientation[0], this->lock_orientation[1],this->lock_orientation[2]);
 	drdStop(true);
 
 }

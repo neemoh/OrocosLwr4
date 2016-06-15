@@ -25,6 +25,40 @@ struct stateVar{
 	std::vector<double> q_min, q_max, v_max, a_max;
 };
 
+
+//-------------------------------------------------------------------------------------
+// CLASS: freqObserver
+//-------------------------------------------------------------------------------------
+class freqObserver{
+public:
+	freqObserver(double _dt_param, unsigned int _dt_init_steps,
+			unsigned int _avg_steps);
+	void check();
+
+	// is the constant parameter
+	double dt_param;
+	// the measured loop time
+	double dt_msrd_last;
+	// the averaged measured loop time
+	double dt_msrd_avg;
+	//computation time
+	double t_computation;
+	//
+	unsigned int avg_steps;
+	// initialization counter
+	unsigned int dt_init_counter;
+
+	unsigned int dt_init_steps;
+
+	// time initial variables
+	RTT::os::TimeService::ticks loop_time_from, computation_time_from;
+
+};
+
+
+//-------------------------------------------------------------------------------------
+// CLASS: Teleop OROCOS COMPONENT
+//-------------------------------------------------------------------------------------
 class Teleop : public RTT::TaskContext{
 
 public:
@@ -64,6 +98,9 @@ public:
 	void stopPalpation();
 
 private:
+
+	// frequency observer object pointer
+	freqObserver * fo;
 
 	bool motionOn;
 	bool destination_reached;
@@ -110,9 +147,7 @@ private:
 	std::vector<double> h_joint, a1, a2 ,a3; 							// Variables of PTP interpolation
 	double T_joint;
 
-	RTT::os::TimeService::ticks time_init, time_last, time_last2;
-	double dt, dt_loop_msrd, dt_computation; 											//dt is set as a property, dt_real is estimated at each cycle.
-	unsigned int dt_counter;
+
 	unsigned int interp_counter;										//Counter is used for PTP interpolator instead of dt_real
 
 	//******************************************  Tracking and teleop variables
@@ -163,7 +198,7 @@ protected:
 	std::vector<double> slv_jnt_v_max_prop, slv_jnt_a_max_prop;					// Vector with the maximum acceleration of each variable
 	std::vector<double> slv_jnt_home_prop;
 	std::vector<double> master_to_base_frame_prop, fs_to_ee_frame_prop, master_to_tool_orient_frame_prop;
-	std::vector<double> palpation_init_6dpose_prop;
+	std::vector<double> palpation_init_3dpose_prop,palpation_home_3dpose_prop;
 
 	double period_prop;
 	RTT::InputPort<geometry_msgs::Pose> 					cart_dest_port;		// DataPort containing the current pose
@@ -181,6 +216,7 @@ protected:
 	RTT::InputPort<geometry_msgs::Pose> 					slave_cart_port;
 
 };
+
 
 #endif
 

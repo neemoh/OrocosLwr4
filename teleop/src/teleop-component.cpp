@@ -51,7 +51,9 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addProperty("tr_master_to_base", 			this->master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
 	this->addProperty("tr_fs_to_ee", 				this->fs_to_ee_frame_prop).doc("Rigid transformation (quaternion) from force sensor to the endeffector. (Attention to x,y,z,w order).");
 	this->addProperty("tr_master_to_tool_orient", 	this->master_to_tool_orient_frame_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
-	this->addProperty("palpation_init_6dpose", 	    this->palpation_init_6dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
+
+	this->addProperty("palpation_home_3dpose", 	    this->palpation_home_3dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
+	this->addProperty("palpation_init_3dpose", 	    this->palpation_init_3dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 
 	this->addOperation("motionON", 					&Teleop::startMotion, 				this).doc("Starts the motion mode");
 	this->addOperation("motionOff", 			    &Teleop::stopMotion, 				this).doc("Stops the motion");
@@ -76,14 +78,8 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->num_cart_var 			= 7; //x,y,z + quaternion
 	this->robot_config 			= 0;
 
-	this->time_last 			= 0.0;
-	this->time_last2 			= 0.0;
 	this->T_joint				= 0.0;
-	this->time_init				= 0.0;
-	this->dt_loop_msrd			= 0.0;
-	this->dt					= 0.0;
-	this->dt_computation		= 0.0;
-	this->dt_counter 			= 0;
+
 	this->interp_counter 		= 0;
 	this->motion_mode			= 0;
 	this->force_bias_counter	= 0;
@@ -155,8 +151,9 @@ bool Teleop::configureHook(){
 	/////////////////////////////////      Variable initialization     //////////////////////////////
 	if (!this->changeMotionMode(this->motion_mode_prop))
 		return false;
-	//////////////			 PROPERTIES			 ///////////////
-	this->dt 						= this->period_prop;
+	//////////////			Using PROPERTIES			 ///////////////
+	// set the initial sleep time of the freq observer to 1 seconds
+	this->fo = new freqObserver(this->period_prop, 1/this->period_prop, 10);
 
 	this->motion_mode 				= this->motion_mode_prop;
 	this->force_feedback_on 		= this->force_feedback_on_prop;
@@ -288,10 +285,10 @@ void Teleop::updateHook(){
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//														Reading data
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	double palp_area_l = 0.05;
-	double palp_area_h = 0.1;
+	double palp_area_l = 0.06;
+	double palp_area_h = 0.06;
 	double palp_area_d = 0.002;
-	this->time_last2 = os::TimeService::Instance()->getTicks();
+	this->fo->computation_time_from = os::TimeService::Instance()->getTicks();
 
 	///////////////////////////////////////////
 	//Reading the joint positions of the robot
@@ -388,13 +385,13 @@ void Teleop::updateHook(){
 			//-------------------------------------------------------------------------------------------------------------------
 			if(this->palpation_on){
 				if(this->palpation_first_time){
-					this->palp_cart_destination = this->palpation_init_6dpose_prop;
+					this->palp_cart_destination = this->palpation_init_3dpose_prop;
 					setPTPCartDestination(this->palp_cart_destination);
 					this->palpation_first_time = false;
 				}
 
 				if (this->destination_reached){
-					if (this->palp_cart_destination[1]< (this->palpation_init_6dpose_prop[1] + palp_area_h)){
+					if (this->palp_cart_destination[1]< (this->palpation_init_3dpose_prop[1] + palp_area_h)){
 						switch (this->palp_point_status){
 
 						case 0 :
@@ -478,7 +475,7 @@ void Teleop::updateHook(){
 				temp_frame.M.GetRPY(cart_6d_dest[3], cart_6d_dest[4], cart_6d_dest[5]);
 
 				variableInterpolator(cart_6d_dest, this->cart_6d_last, this->v_cart_6d_last, cart_6d_cmd,
-						v_cart_6d_now,  cart_6d_min, cart_6d_max, cart_6d_v_max, cart_6d_a_max, this->destination_reached, this->dt) ;
+						v_cart_6d_now,  cart_6d_min, cart_6d_max, cart_6d_v_max, cart_6d_a_max, this->destination_reached, this->fo->dt_param) ;
 
 //				cout << "cart_6d_dest " << cart_6d_dest<< endl;
 //				cout << "cart_6d_cmd " << cart_6d_dest<< endl;
@@ -591,8 +588,8 @@ void Teleop::updateHook(){
 						conversions::vectorToKDLFrame(this->mstr_pose_init, this->mstr_frame_init);
 						conversions::vectorToKDLFrame(this->slv_cart.q_init, this->slv_frame_init);
 
-						this->first_engagement_counter_rpy = 0.5 * 1/this->dt;// seconds first engagement integration;
-						this->first_engagement_counter_pos = 0.5 * 1/this->dt;// seconds first engagement integration;
+						this->first_engagement_counter_rpy = 0.5 * 1/this->fo->dt_param;// seconds first engagement integration;
+						this->first_engagement_counter_pos = 0.5 * 1/this->fo->dt_param;// seconds first engagement integration;
 
 						this->slv_jnt.q_cmd_last = this->slv_jnt.q_curr; // Used in the tracking supervisor
 						this->psi_last[0] = this->ns_param.at(0); // for the redundancy handler
@@ -622,6 +619,7 @@ void Teleop::updateHook(){
 
 					vec_dbl	rpy_temp = vec_dbl(3,0.0);
 					this->mstr_frame_curr.M.GetRPY(rpy_temp[0],rpy_temp[1],rpy_temp[2]);
+
 					for(int i= 0; i<3 ; i++){
 						this->mstr_rpy_avg[i] -= this->mstr_rpy_avg[i] / this->rpy_avg_n_variable;
 						this->mstr_rpy_avg[i] += rpy_temp[i] / this->rpy_avg_n_variable;
@@ -950,7 +948,7 @@ void Teleop::updateHook(){
 			//				if(psi_cmd- this->psi_last[0] >  psi_cmd_step)	psi_cmd = this->psi_last[0] + psi_cmd_step;
 			//				if(psi_cmd- this->psi_last[0] < -psi_cmd_step)	psi_cmd = this->psi_last[0] - psi_cmd_step;
 			variableInterpolator(psi_chosen, this->psi_last, this->psi_v_last, psi_cmd,
-					this->psi_v_cmd,  psi_q_min, psi_q_max ,psi_v_max, psi_a_max, psi_flag_temp, this->dt) ;
+					this->psi_v_cmd,  psi_q_min, psi_q_max ,psi_v_max, psi_a_max, psi_flag_temp, this->fo->dt_param) ;
 
 			//				cout << "psi_chosen " <<  psi_chosen <<" psi_last " << this->psi_last << "  cmd " << psi_cmd << endl;
 
@@ -984,25 +982,24 @@ void Teleop::updateHook(){
 		//		this->clipToLimits(this->slv_cart.q_cmd, this->slv_cart.q_min, this->slv_cart.q_max);
 		//		this->clipToLimits(this->slv_jnt.q_cmd, this->slv_jnt.q_min, this->slv_jnt.q_max);
 
-		////////////////////////////////////////////////////////////////////////////////////////
-		//Estimate Cartesian velocity of the robot
-		///////////////////////////////////////////////////////////////////////////////////////
 
-		this->dt_loop_msrd = os::TimeService::Instance()->secondsSince(this->time_last);
-		this->time_last = os::TimeService::Instance()->getTicks();
-		//measure the loop frequency after a couple of runs
-		if(this->dt_counter <= 2)
-			this->dt_counter++;
-		else if(fabs(this->dt_loop_msrd -this->dt)>0.0009)
-			log(RTT::Warning) << "ATTENTION! The FRI frequency seems to be different from what I have been told!!!" << endlog();
+		//-------------------------------------------------------------------------------------
+		// calculating time related stuff
+		//-------------------------------------------------------------------------------------
+
+		// Observe the loop frequency after a few first
+		this->fo->check();
+
+		//-------------------------------------------------------------------------------------
+		// Estimate Cartesian velocity of the robot
+		//-------------------------------------------------------------------------------------
 
 		for (unsigned int iter=0; iter < this->num_cart_p_var; iter++){
-			this->slv_cart.v_curr.at(iter) = (this->slv_cart.q_cmd.at(iter) - this->slv_cart.q_cmd_last.at(iter)) / this->dt;
+			this->slv_cart.v_curr.at(iter) = (this->slv_cart.q_cmd.at(iter) - this->slv_cart.q_cmd_last.at(iter)) / this->fo->dt_param;
 		}
 		for (unsigned int iter=0; iter < this->num_joints; iter++){
-			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->dt;
+			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->fo->dt_param;
 		}
-		this->dt_computation = os::TimeService::Instance()->secondsSince(this->time_last2);
 
 		conversions::vectorToVector3(this->slv_jnt.v_curr, this->tmp_vec3);
 		//		this->tmp_vec3.y= this->dt_loop_msrd*1000;
@@ -1018,11 +1015,9 @@ void Teleop::updateHook(){
 		this->slv_jnt.q_last = this->slv_jnt.q_curr;
 		this->slv_jnt.q_cmd_last = this->slv_jnt.q_cmd;
 
-		if (!this->destination_reached || this->master_clutch.data == 1 ){
 
-//			if( conversions::vectorToJointPos(this->slv_jnt.q_cmd, this->tmp_joint_pos))
-//				this->joint_command_port.write(this->tmp_joint_pos);
-		}
+		// Measuring the computation time
+		this->fo->t_computation = os::TimeService::Instance()->secondsSince(this->fo->computation_time_from);
 
 	}
 }
@@ -1035,6 +1030,7 @@ void Teleop::stopHook() {
 }
 
 void Teleop::cleanupHook() {
+	delete this->fo;
 	std::cout << "Teleop cleaning up !" <<std::endl;
 }
 
@@ -1207,7 +1203,7 @@ bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 		if (this->destination_reached){
 			//Save the initial values and time
 			this->slv_joint_p_interpd_init = this->slv_jnt.q_curr;
-			this->time_init = os::TimeService::Instance()->getTicks();
+//			this->time_init = os::TimeService::Instance()->getTicks();
 			this->interp_counter = 1;
 
 			//Set the destination and the flags
@@ -1448,7 +1444,7 @@ bool Teleop::P2PInterpolator(const vec_dbl p_dest, const vec_dbl p_init, vec_dbl
 
 	double taw = 0.0;
 	//taw = (os::TimeService::Instance()->secondsSince(time_init)) / T;  //This turned to be a bad choice. Constant dt
-	taw = counter * this->dt / T;
+	taw = counter * this->fo->dt_param / T;
 	counter++;
 
 	if (taw<=1.0)
@@ -1484,11 +1480,61 @@ bool Teleop::P2PInterpolator(const vec_dbl p_dest, const vec_dbl p_init, vec_dbl
 
 void Teleop::startPalpation(){
 	this->palpation_on = true;
+	this->changeMotionMode(2);
 	this->palpation_first_time = true;
 }
 
 void Teleop::stopPalpation(){
 	this->palpation_on = false;
 	this->palpation_first_time = false;
+	this->palp_point_status = 0;
+	this->destination_reached = true;
+	this->changeMotionMode(1);
+	this->setPTPCartDestination(this->palpation_home_3dpose_prop);
+}
+
+
+//-------------------------------------------------------------------------------------
+// freqObserver constructor
+//-------------------------------------------------------------------------------------
+freqObserver::freqObserver(double _dt_param, unsigned int _dt_init_steps, unsigned int _avg_steps){
+
+	dt_param=_dt_param;
+	dt_init_steps= _dt_init_steps;
+	avg_steps = _avg_steps;
+	//initializing the measured values with the nominal one
+	dt_msrd_avg=_dt_param;
+	dt_msrd_last=_dt_param;
+	t_computation=0;
+
+	dt_init_counter=0;
+	computation_time_from = 0;
+	loop_time_from = 0;
+
+}
+
+//-------------------------------------------------------------------------------------
+// freqObserver check the frequency
+//-------------------------------------------------------------------------------------
+void freqObserver::check(){
+
+	if(dt_init_counter <=  dt_init_steps){
+		dt_init_counter++;
+		loop_time_from = os::TimeService::Instance()->getTicks();
+	}
+	else{
+
+		dt_msrd_last = os::TimeService::Instance()->secondsSince(loop_time_from);
+		loop_time_from = os::TimeService::Instance()->getTicks();
+
+		dt_msrd_avg-= dt_msrd_avg/avg_steps;
+		dt_msrd_avg+= dt_msrd_last/avg_steps;
+
+		// Warn if the average measured loop time is more than %10 different than the expected
+		if(fabs(dt_msrd_avg - dt_param)> dt_param/10)
+			log(RTT::Warning) << "ATTENTION! Frequency inconsistency!! My average loop time is:"<< dt_msrd_avg << " While I expect: "<< dt_param << endlog();
+	}
+
+
 }
 ORO_CREATE_COMPONENT(Teleop)

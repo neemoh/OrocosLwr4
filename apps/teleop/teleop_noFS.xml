@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "cpf.dtd">
+<properties>
+  <!-- Note: Capital P -->
+  <!--To add "scripting" property on ROS topics-->
+<!--  <simple name="Import" type="string"><value>rtt_rosnode</value></simple>
+  <simple name="Import" type="string"><value>ocl</value></simple> 
+  <simple name="Import" type="string"><value>kdl_typekit</value></simple>
+  <simple name="Import" type="string"><value>rtt_tf</value></simple>
+  <simple name="Import" type="string"><value>lwr_fri_master</value></simple> -->
+  <simple name="Import" type="string"><value>teleop</value></simple>
+  <simple name="Import" type="string"><value>lwr_fri</value></simple>
+  <simple name="Import" type="string"><value>sigma7</value></simple>
+	<!--		Robot		-->
+	<struct name="FRIServer" type="lwr_fri::FRIComponent">
+		<struct name="Activity" type="NonPeriodicActivity">
+			<simple name="Priority" type="long"><value>99</value></simple>
+			<simple name="Scheduler" type="string"><value>ORO_SCHED_RT</value></simple>
+		</struct>
+		<simple name="AutoConf" type="boolean"><value>1</value></simple>
+		<simple name="AutoStart" type="boolean"><value>1</value></simple>
+		<simple name="LoadProperties" type="string"><value>conf/FRIServer.cpf</value></simple>
+		<struct name="Ports" type="PropertyBag">
+
+			<simple name="JointState" type="string"><value>FRI_JointStateOut</value></simple>
+			<simple name="JointPositionCommand" type="string"><value>FRI_jointCommand</value></simple> 
+			<simple name="CartesianPosition" type="string"><value>FRI_CartesianPositionOut</value></simple>
+		<!--	<simple name="CartesianWrench" type="string"><value>force_from_slave</value></simple>
+			<simple name="fromKRL" type="string"><value>FRI_fromKRL</value></simple>
+			<simple name="toKRL" type="string"><value>FRI_toKRL</value></simple>
+			<simple name="FriJointState" type="string"><value>FRI_FriJointStateOut</value></simple>
+			<simple name="JointState" type="string"><value>robotJointData</value></simple> -->
+
+		</struct>
+	</struct>
+
+
+	<struct name="teleop" type="Teleop">
+		<struct name="Activity" type="NonPeriodicActivity">
+			<!--<simple name="Period" type="double"><value>0.001</value></simple>-->
+			<simple name="Priority" type="long"><value>90</value></simple>
+			<simple name="Scheduler" type="string"><value>ORO_SCHED_RT</value></simple>
+		</struct>
+		<simple name="LoadProperties" type="string"><value>conf/teleop_params.cpf</value></simple>
+		<simple name="AutoConf" type="boolean"><value>1</value></simple>
+		<simple name="AutoStart" type="boolean"><value>1</value></simple>
+		<struct name="Ports" type="PropertyBag">
+
+			<simple name="inputMasterButton" type="string"><value>master_pedal</value></simple>
+			<simple name="inputCartDestination" type="string"><value>master_pose</value></simple>
+			<simple name="inputJointCurrent" type="string"><value>FRI_JointStateOut</value></simple>
+			<simple name="inputSlaveCart" type="string"><value>FRI_CartesianPositionOut</value></simple>
+			<simple name="outputJointPos" type="string"><value>FRI_jointCommand</value></simple>	
+			<simple name="outputCartPoseFK" type="string"><value>FKCartCurrent</value></simple>	
+<!--			<simple name="forceToMaster" type="string"><value>wrench_to_master</value></simple>
+
+			<simple name="forceFromSlave" type="string"><value>wrench_from_sensor</value></simple>
+			<simple name="outputCartPose" type="string"><value>outputCartPose</value></simple>
+			
+			<simple name="outputCartPose" type="string"><value>outputCartPose</value></simple>
+			<simple name="fromKRL_master" type="string"><value>FRI_fromKRL</value></simple>
+			<simple name="toKRL_master" type="string"><value>FRI_toKRL</value></simple>
+			<simple name="outputJointVel" type="string"><value>jointVelocity</value></simple>
+			<simple name="outputCartPose" type="string"><value>outputCartPose</value></simple> -->
+			
+		</struct>			
+	</struct>
+
+	<struct name="sigma" type="sigma7">
+		<struct name="Activity" type="NonPeriodicActivity">
+			<!--<simple name="Period" type="double"><value>0.002</value></simple>-->
+			<simple name="Priority" type="long"><value>90</value></simple>
+			<simple name="Scheduler" type="string"><value>ORO_SCHED_RT</value></simple>
+		</struct>
+		<simple name="LoadProperties" type="string"><value>conf/teleop_params.cpf</value></simple>
+		<simple name="AutoConf" type="boolean"><value>1</value></simple>
+		<simple name="AutoStart" type="boolean"><value>1</value></simple>
+		<struct name="Ports" type="PropertyBag">
+			<simple name="trigger" type="string"><value>FRI_JointStateOut</value></simple>
+			<simple name="sigma_pose_read" type="string"><value>master_pose</value></simple>
+		<!--    <simple name="sigma_button" type="string"><value>master_button</value></simple> -->
+			<simple name="sigma_pose_dest" type="string"><value>FRI_CartesianPositionOut</value></simple>
+			<simple name="sigma_pedal" type="string"><value>master_pedal</value></simple>			
+			
+		</struct>
+
+	</struct>
+
+  <!--FORCE SENSOR FT45 COMPONENT-->
+<!--
+  	<struct name="FT45" type="FT45">
+		<struct name="Activity" type="NonPeriodicActivity">
+			<simple name="Priority" type="long"><value>1</value></simple>
+			<simple name="Scheduler" type="string"><value>ORO_SCHED_RT</value></simple>
+		</struct>
+		<simple name="AutoConf" type="boolean"><value>0</value></simple>
+		<simple name="AutoStart" type="boolean"><value>0</value></simple>
+		<struct name="Ports" type="PropertyBag">
+			<simple name="Wrench0_ros" type="string"><value>wrench_from_sensor</value></simple>
+		</struct>
+  	</struct>
+  
+	<struct name="Deployer" type="PropertyBag">
+		<simple name="Service" type="string"><value>scripting</value></simple>
+		<simple name="RunScript" type="string"><value>conf/FT45.ops</value></simple>
+	</struct> 
+
+-->
+
+  <!--Reporting component to write the measurements to a file-->
+<!--
+  <struct name="Reporter" type="OCL::FileReporting">
+	<struct name="Activity" type="PeriodicActivity">
+		 <simple name="Period" type="double"><value>0.01</value></simple> 
+		<simple name="Priority" type="long"><value>0</value></simple>
+		<simple name="Scheduler" type="string"><value>ORO_SCHED_RT</value></simple>
+	</struct>
+	<simple name="AutoConf" type="boolean"><value>1</value></simple>
+	<simple name="AutoStart" type="boolean"><value>0</value></simple>
+	<simple name="AutoSave" type="boolean"><value>0</value></simple>
+	<simple name="LoadProperties" type="string"><value>conf/reporting.cpf</value></simple>
+
+	<struct name="Peers" type="PropertyBag">
+		<simple type="string"><value>teleop</value></simple>
+		 <simple type="string"><value>FRIServer</value></simple> 
+	</struct>
+  </struct>
+
+
+-->
+<!-- """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" -->
+   <struct name="master_pedal" type="ConnPolicy">
+	<simple name="transport" type="long"><value>3</value></simple>
+	<simple name="size" type="long"><value>1</value></simple>
+	<simple name="name_id" type="string"><value>/pedalPub/pedal</value></simple>
+   </struct>
+
+   <struct name="FKCartCurrent" type="ConnPolicy">
+	<simple name="transport" type="long"><value>3</value></simple>
+	<simple name="size" type="long"><value>1</value></simple>
+	<simple name="name_id" type="string"><value>/FKCartCurrent</value></simple>
+   </struct>
+
+<!--
+
+
+
+    <struct name="wrench_from_sensor" type="ConnPolicy">
+	<simple name="transport" type="long"><value>3</value></simple>
+	<simple name="size" type="long"><value>1</value></simple>
+	<simple name="name_id" type="string"><value>/ft45/wrench</value></simple>
+   </struct>
+
+
+	<struct name="wrench_to_master" type="ConnPolicy">
+		<simple name="transport" type="long"><value>3</value></simple>
+		<simple name="size" type="long"><value>1</value></simple>
+		<simple name="name_id" type="string"><value>/wrench_to_master</value></simple>
+	</struct>
+
+	<struct name="force_from_slave" type="ConnPolicy">
+		<simple name="transport" type="long"><value>3</value></simple>
+		<simple name="size" type="long"><value>1</value></simple>
+		<simple name="name_id" type="string"><value>/force_from_slave</value></simple>
+	</struct>
+
+
+       -->
+
+
+<!--
+	<struct name="FRI_MASTER" type="Lwr_fri_master::Lwr_fri_master">
+		<struct name="Activity" type="NonPeriodicActivity">
+			<simple name="Priority" type="long"><value>15</value></simple>
+			<simple name="Scheduler" type="string"><value>ORO_SCHED_RT</value></simple>
+		</struct>
+		<simple name="AutoConf" type="boolean"><value>1</value></simple>
+		<simple name="AutoStart" type="boolean"><value>0</value></simple>
+		<struct name="Properties" type="PropertyBag">
+			<simple name="control_mode" type="long"><value>1</value></simple>
+			<simple name="control_FRI" type="long"><value>1</value></simple>
+		</struct>
+		<struct name="Ports" type="PropertyBag">
+			<simple name="fromKRL_master" type="string"><value>FRI_fromKRL</value></simple>
+			<simple name="toKRL_master" type="string"><value>FRI_toKRL</value></simple>
+		</struct>
+	</struct>
+	
+-->
+</properties>
