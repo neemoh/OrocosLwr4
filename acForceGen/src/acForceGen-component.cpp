@@ -55,6 +55,9 @@ AcForceGen::AcForceGen(std::string const& name) : TaskContext(name)	{
 	this->addPort("desired_pose", this->port_read_desired_pose).doc("Readings the desired pose of the tool");
 	this->addPort("hapdev_switch", this->port_read_hapdev_switch).doc("Reading the state of the haptic device switch");
 	this->addPort("ac_force", this->port_write_force).doc("Writing the generated active constraint");
+	// read properties
+	this->addProperty("tr_master_to_base", 	master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
+
 	// add operations
 	this->addOperation("setACMode", &AcForceGen::setACMode, this).doc("set the active constraint method: 0: No ac, 1: Plastic, 2:Plastic with redirection, 3: vicouse with redirection, -1 elastic test");
 	this->addOperation("setFMAX", &AcForceGen::setFMAX, this).doc("set the active constraint method");
@@ -79,6 +82,9 @@ bool AcForceGen::configureHook(){
 
 	// initializing the output port
 	this->port_write_force.setDataSample(this->wrench_out);
+
+	// properties
+	this->mstr_to_slv_frame.M	= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
 
 	std::cout << "AcForceGen configured !" <<std::endl;
 	return true;
@@ -138,7 +144,7 @@ void AcForceGen::updateHook(){
 		this->ac_vr_ptr->getForce(this->ac_force, this->current_pos, this->desired_pos,this->current_vel);
 		break;
 	case -1:
-		ac_elastic_force_generation(ac_force, penet);
+		ac_elastic_force_generation(this->ac_force, penet);
 		break;
 
 	default:
@@ -148,9 +154,11 @@ void AcForceGen::updateHook(){
 	}
 
 	// writing the wrench on the port
-	this->wrench_out.force.x = ac_force[0];
-	this->wrench_out.force.y = ac_force[1];
-	this->wrench_out.force.z = ac_force[2];
+	this->ac_force_master_ref = this->mstr_to_slv_frame.M.Inverse() * this->ac_force;
+
+	this->wrench_out.force.x = this->ac_force_master_ref[0];
+	this->wrench_out.force.y = this->ac_force_master_ref[1];
+	this->wrench_out.force.z = this->ac_force_master_ref[2];
 	this->port_write_force.write(this->wrench_out);
 
 }

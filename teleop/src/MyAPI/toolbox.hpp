@@ -27,7 +27,7 @@ namespace conversions  {
 	void JointPosVectorToJointState (const vector<double> ,   sensor_msgs::JointState& );
 	void vectorToVector3(const vector<double> , geometry_msgs::Vector3& );
 	void vectorToPoseMsg(const vector<double> , geometry_msgs::Pose&);
-
+	void vectorToTwist(const vector<double> vec, geometry_msgs::Twist& twist);
 	bool KDLFrameToVector(KDL::Frame kdlFrame, vector<double> & vector) ;
 	bool vectorToKDLFrame(vector<double> matrixvector, KDL::Frame &matrix);
 

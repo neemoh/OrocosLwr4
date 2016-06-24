@@ -21,6 +21,9 @@ bool AcGeomGen::configureHook(){
 	this->ac_sq = new acSquare(square_ac_info_prop);
 	this->ac_ci = new acCircle(circle_ac_info_prop);
 
+	// initialize port
+	this->port_tool_pose_desired.setDataSample(this->tool_current_pose_msg);
+
 	std::cout << "AcGeomGen configured !" <<std::endl;
 	return true;
 }
@@ -69,11 +72,16 @@ void AcGeomGen::updateHook(){
 // CLOSING ANC CLEANING UP
 //----------------------------------------------------------------------------------------------
 void AcGeomGen::stopHook() {
+	RTT::Logger::In in(this->getName());
+
 	std::cout << "AcGeomGen executes stopping !" <<std::endl;
 }
 
 void AcGeomGen::cleanupHook() {
+	RTT::Logger::In in(this->getName());
+
 	delete ac_sq;
+	delete ac_ci;
 	std::cout << "AcGeomGen cleaning up !" <<std::endl;
 }
 
@@ -112,6 +120,7 @@ void poseMsgToPositionKDLVec( geometry_msgs::Pose pose_in, KDL::Vector &vec_out)
 //----------------------------------------------------------------------------------------------
 acSquare::acSquare(std::vector<double> in){
 	// input is a vector containing: [center_x, center_y, center_z, width, height]
+	center = std::vector<double>(3,0.0);
 	center[0]= in[0];
 	center[1]= in[1];
 	center[2]= in[2];
@@ -156,6 +165,7 @@ void acSquare::getClosestPoint(double tool_x, double tool_y, geometry_msgs::Pose
 //----------------------------------------------------------------------------------------------
 acCircle::acCircle(std::vector<double> in){
 	// input is a vector containing: [center_x, center_y, center_z, width, height]
+	center = std::vector<double>(3,0.0);
 	center[0]= in[0];
 	center[1]= in[1];
 	center[2]= in[2];

@@ -78,10 +78,12 @@ if (RTNET_INCLUDE_DIR AND ${OROCOS_TARGET} STREQUAL "xenomai")
 	orocos_add_link_flags(teleop ${XENO_LDFLAGS})
 endif()
 
-add_library(toolbox SHARED src/MyAPI/toolbox.cpp src/MyAPI/toolbox.hpp)
+add_library(toolbox 		SHARED 	src/MyAPI/toolbox.cpp src/MyAPI/toolbox.hpp)
+add_library(LWR4_Kinematics 	SHARED 	src/MyAPI/LWR4_Kinematics.cpp src/MyAPI/LWR4_Kinematics.hpp)
+add_library(FOAW 		SHARED 	src/MyAPI/filter.cpp src/MyAPI/filter.h)
+
 target_link_libraries(toolbox libtf_conversions.so)
-add_library(LWR4_Kinematics SHARED src/MyAPI/LWR4_Kinematics.cpp src/MyAPI/LWR4_Kinematics.hpp)
-target_link_libraries(teleop toolbox LWR4_Kinematics )
+target_link_libraries(teleop toolbox LWR4_Kinematics FOAW)
 #
 # Generates and installs our package. Must be the last statement such
 # that it can pick up all above settings.

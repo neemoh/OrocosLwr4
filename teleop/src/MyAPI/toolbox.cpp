@@ -121,6 +121,13 @@ void  conversions::vectorToVector3(const vector<double> vec, geometry_msgs::Vect
 	vec3.z = vec.at(2);
 }
 
+void  conversions::vectorToTwist(const vector<double> vec, geometry_msgs::Twist& twist){
+
+	twist.linear.x = vec.at(0);
+	twist.linear.y = vec.at(1);
+	twist.linear.z = vec.at(2);
+
+}
 
 
 

@@ -14,12 +14,12 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addPort("outputJointPos", this->joint_command_port).doc("Readings of the pose from Sigma");
 	this->addPort("outputCartPose", this->cart_command_port).doc("Readings of the pose from Sigma");
 	this->addPort("outputCartPoseFK", this->cart_FK_port).doc("Readings of the pose from Sigma");
-	this->addPort("outputJointVel", this->joint_vel_port).doc("Readings of the pose from Sigma");
+	this->addPort("outputCartTwist", this->port_cart_twist).doc("Readings of the pose from Sigma");
 	this->addEventPort("inputJointCurrent", this->joint_curr_port).doc("Readings of the pose from PhanomOmni");
 	this->addPort("inputCartDestination", this->cart_dest_port).doc("Output of the pose to Sigma");
 	this->addPort("inputSlaveCart", this->slave_cart_port).doc("Output of the pose to Sigma");
 
-	this->addPort("inputMasterButton", this->master_button_port).doc("Output of the pose to Sigma");
+	this->addPort("inputMasterClutch", this->master_clutch_port).doc("Output of the pose to Sigma");
 	this->addPort("forceToMaster", this->force_to_master_port).doc("Readings of the pose from Sigma");
 	this->addPort("forceFromSlave", this->force_from_slave_port).doc("Readings of the pose from Sigma");
 
@@ -151,9 +151,14 @@ bool Teleop::configureHook(){
 	/////////////////////////////////      Variable initialization     //////////////////////////////
 	if (!this->changeMotionMode(this->motion_mode_prop))
 		return false;
-	//////////////			Using PROPERTIES			 ///////////////
+
 	// set the initial sleep time of the freq observer to 1 seconds
 	this->fo = new freqObserver(this->period_prop, 1/this->period_prop, 10);
+
+	// construct the velocity filter object
+//	this->v_filt = new FOAWBestFit(10, 1/fo->dt_param, 0.0001);
+
+	//////////////			Using PROPERTIES			 ///////////////
 
 	this->motion_mode 				= this->motion_mode_prop;
 	this->force_feedback_on 		= this->force_feedback_on_prop;
@@ -236,7 +241,7 @@ bool Teleop::configureHook(){
 
 	//Initialize output ports
 	this->joint_command_port.setDataSample(this->tmp_joint_pos);
-	this->joint_vel_port.setDataSample(this->tmp_vec3);
+	this->port_cart_twist.setDataSample(this->tmp_twist);
 	this->force_to_master_port.setDataSample(this->mstr_wrench_cmd);
 	this->cart_FK_port.setDataSample(this->tmp_pose_msg);
 
@@ -318,7 +323,7 @@ void Teleop::updateHook(){
 
 	///////////////////////////////////////////
 	//Reading the haptic device's clutch state
-	if(this->master_button_port.connected() && this->master_button_port.read(this->tmp_button) == RTT::NewData){
+	if(this->master_clutch_port.connected() && this->master_clutch_port.read(this->tmp_button) == RTT::NewData){
 		this->master_clutch = this->tmp_button;
 	}
 
@@ -712,9 +717,10 @@ void Teleop::updateHook(){
 						//Taking the forces to the master's reference frame
 						this->tmp_frame.p = this->mstr_to_slv_frame.M.Inverse() * this->slv_frame_curr.M * this->fs_to_ee_frame.M.Inverse() * this->tmp_frame.p ;
 
-						this->mstr_wrench_cmd.force.x = -this->tmp_frame.p[0];
-						this->mstr_wrench_cmd.force.y = -this->tmp_frame.p[1];
-						this->mstr_wrench_cmd.force.z = -this->tmp_frame.p[2];
+
+						this->mstr_wrench_cmd.force.x = this->tmp_frame.p[0];
+						this->mstr_wrench_cmd.force.y = this->tmp_frame.p[1];
+						this->mstr_wrench_cmd.force.z = this->tmp_frame.p[2];
 					}
 					else{//If the force is disabled
 						this->mstr_wrench_cmd.force.x = 0.0;
@@ -979,6 +985,7 @@ void Teleop::updateHook(){
 			if( conversions::vectorToJointPos(this->slv_jnt.q_cmd, this->tmp_joint_pos))
 				this->joint_command_port.write(this->tmp_joint_pos);
 		}
+		// 		//this is not a good idea!
 		//		this->clipToLimits(this->slv_cart.q_cmd, this->slv_cart.q_min, this->slv_cart.q_max);
 		//		this->clipToLimits(this->slv_jnt.q_cmd, this->slv_jnt.q_min, this->slv_jnt.q_max);
 
@@ -986,26 +993,35 @@ void Teleop::updateHook(){
 		//-------------------------------------------------------------------------------------
 		// calculating time related stuff
 		//-------------------------------------------------------------------------------------
-
-		// Observe the loop frequency after a few first
+		// Observe the loop frequency
 		this->fo->check();
 
 		//-------------------------------------------------------------------------------------
 		// Estimate Cartesian velocity of the robot
 		//-------------------------------------------------------------------------------------
-
+		// Simple first order method turns out to be good enough. I compared it with FOAW and
+		// saw no improvement so I switched back to first order.
+		// Note that I am calculating the velocity based on the commanded position not current one
 		for (unsigned int iter=0; iter < this->num_cart_p_var; iter++){
 			this->slv_cart.v_curr.at(iter) = (this->slv_cart.q_cmd.at(iter) - this->slv_cart.q_cmd_last.at(iter)) / this->fo->dt_param;
 		}
-		for (unsigned int iter=0; iter < this->num_joints; iter++){
-			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->fo->dt_param;
-		}
 
-		conversions::vectorToVector3(this->slv_jnt.v_curr, this->tmp_vec3);
-		//		this->tmp_vec3.y= this->dt_loop_msrd*1000;
-		//		this->tmp_vec3.z= this->dt_computation*1000;
-		this->joint_vel_port.write(this->tmp_vec3);
-		conversions::vec3Reset(tmp_vec3);
+		//		// FOAW
+		//		double v_foaw;
+		//		int ws;
+		//		this->v_filt->filter(this->slv_cart.q_cmd[0], v_foaw, ws);
+
+		conversions::vectorToTwist(this->slv_cart.v_curr, this->tmp_twist);
+
+		this->port_cart_twist.write(this->tmp_twist);
+
+
+		//  	//joint vel
+		//		for (unsigned int iter=0; iter < this->num_joints; iter++){
+		//			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->fo->dt_param;
+		//		}
+
+
 
 		////////////////////////////////////////////////////////////////////////////////////////
 		//Set last values

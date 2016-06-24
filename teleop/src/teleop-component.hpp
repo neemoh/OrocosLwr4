@@ -6,6 +6,7 @@
 #include "MyAPI/LWR4_Kinematics.hpp"
 #include "MyAPI/toolbox.hpp"
 #include "MyAPI/interpolator.cpp"
+//#include "MyAPI/filter.h"
 
 #include <cmath>
 //#include <math.h>
@@ -119,6 +120,8 @@ private:
 	motion_control_msgs::JointPositions tmp_joint_pos;
 	geometry_msgs::Pose tmp_pose_msg;
 	geometry_msgs::Vector3 tmp_vec3;
+	geometry_msgs::Twist tmp_twist;
+
 	std::vector<double> tmp_cart_vec, tmp_joint_vec;
 	unsigned int mode4_counter;
 	bool first_time_temp,dest_reached_temp, new_dest_temp;
@@ -202,11 +205,11 @@ protected:
 
 	double period_prop;
 	RTT::InputPort<geometry_msgs::Pose> 					cart_dest_port;		// DataPort containing the current pose
-	RTT::InputPort<std_msgs::Int8> 							master_button_port;
+	RTT::InputPort<std_msgs::Int8> 							master_clutch_port;
 	RTT::InputPort<sensor_msgs::JointState> 				joint_curr_port;		// DataPort containing the stamped pose
 	RTT::InputPort<geometry_msgs::Wrench>					force_from_slave_port;
 	RTT::OutputPort<motion_control_msgs::JointPositions>	joint_command_port;		// DataPort containing the stamped pose
-	RTT::OutputPort<geometry_msgs::Vector3> 				joint_vel_port;
+	RTT::OutputPort<geometry_msgs::Twist> 					port_cart_twist;
 	RTT::OutputPort<geometry_msgs::Pose> 					cart_command_port;
 	RTT::OutputPort<geometry_msgs::Pose> 					cart_FK_port;
 	RTT::OutputPort<geometry_msgs::Wrench>					force_to_master_port;

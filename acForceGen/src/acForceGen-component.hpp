@@ -42,9 +42,13 @@ private:
 	geometry_msgs::Twist current_twist;
 	KDL::Vector current_pos, desired_pos, penet;
 	KDL::Vector ac_force;
+	KDL::Vector ac_force_master_ref;
 	KDL::Vector current_vel;
-
+	KDL::Frame mstr_to_slv_frame;
 protected:
+	// properties
+	std::vector<double> master_to_base_frame_prop;
+
 	// defining the ports
 	RTT::InputPort<geometry_msgs::Pose> port_read_tool_pose;
 	RTT::InputPort<geometry_msgs::Twist> port_read_twist;
