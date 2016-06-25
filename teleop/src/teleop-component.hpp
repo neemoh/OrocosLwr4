@@ -173,6 +173,7 @@ private:
 	KDL::Frame fs_to_ee_frame, mstr_to_slv_frame, master_to_tool_orient_frame;
 
 	//***************************** Kinematics********************************
+	LWR4Kinematics* kine;
 	std::vector<std::vector<double> > dh;
 	double limbs[4];
 	double tool_zlength;

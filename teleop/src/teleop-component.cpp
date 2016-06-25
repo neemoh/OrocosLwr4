@@ -182,6 +182,7 @@ bool Teleop::configureHook(){
 	this->slv_cart.v_max 			= this->slv_cart_v_max_prop;
 	this->slv_cart.a_max 			= this->slv_cart_a_max_prop;
 
+	this->kine = new LWR4Kinematics(this->tool_zlength);
 
 	this->mstr_to_slv_frame.M			= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
 	this->fs_to_ee_frame.M				= KDL::Rotation::Quaternion(this->fs_to_ee_frame_prop[0], this->fs_to_ee_frame_prop[1], this->fs_to_ee_frame_prop[2], this->fs_to_ee_frame_prop[3]);
@@ -306,17 +307,15 @@ void Teleop::updateHook(){
 		this->slv_jnt.q_curr = this->tmp_joint_vec;
 
 		//Forward kinematics
-		if (LWR4_Kinematics::FK(this->slv_jnt.q_curr, this->robot_config, this->ns_param.at(0), this->tool_zlength, this->tmp_frame)) {
-			conversions::KDLFrameToVector(this->tmp_frame, this->tmp_cart_vec);
-			conversions::vectorToPoseMsg(this->tmp_cart_vec, this->tmp_pose_msg);
-			this->slv_frame_curr = this->tmp_frame;
-			this->slv_cart.q_curr = this->tmp_cart_vec;
-			this->tmp_cart_vec = std::vector<double>(7, 0.0);
-			this->cart_FK_port.write(this->tmp_pose_msg);
-		}
-		else {
-			log(RTT::Error) << "No good pose of the robot; no solution of the forward kinematics!" << endlog();
-		}
+		this->kine->fk(this->slv_jnt.q_curr, this->robot_config, this->ns_param.at(0), this->tmp_frame);
+		conversions::KDLFrameToVector(this->tmp_frame, this->tmp_cart_vec);
+		conversions::vectorToPoseMsg(this->tmp_cart_vec, this->tmp_pose_msg);
+		this->slv_frame_curr = this->tmp_frame;
+		this->slv_cart.q_curr = this->tmp_cart_vec;
+
+		this->tmp_cart_vec = std::vector<double>(7, 0.0);
+		this->cart_FK_port.write(this->tmp_pose_msg);
+
 		this->tmp_joint_vec = std::vector<double>(this->num_joints, 0.0); 		//Reset temporary variables
 
 	}
@@ -354,7 +353,7 @@ void Teleop::updateHook(){
 				//Inverse Kinematics
 				if(conversions::vectorToKDLFrame(this->slv_cart.q_dest, this->tmp_frame))
 				{
-					if (LWR4_Kinematics::IK(this->tmp_frame, this->robot_config, this->ns_param.at(0), this->tool_zlength, this->tmp_joint_vec)) {
+					if (this->kine->ik(this->tmp_frame, this->robot_config,  this->ns_param.at(0), this->tmp_joint_vec)) {
 						this->setPTPJointDestination(this->tmp_joint_vec);
 					}
 					else {
@@ -526,7 +525,7 @@ void Teleop::updateHook(){
 				//Inverse Kinematics
 				if(conversions::vectorToKDLFrame(this->mstr_pose_curr, this->tmp_frame))
 				{
-					if (LWR4_Kinematics::IK(this->tmp_frame, this->robot_config, this->ns_param.at(0), this->tool_zlength, this->tmp_joint_vec)) {
+					if (this->kine->ik(this->tmp_frame, this->robot_config,  this->ns_param.at(0), this->tmp_joint_vec)) {
 						this->slv_jnt.q_dest = tmp_joint_vec;
 						//							this->trackingSupervisor(this->slv_jnt.q_cmd, this->slv_jnt.q_dest, this->slv_jnt.q_last , this->slv_jnt.v_max, this->dt);
 						//							this->trackingSupervisor(this->slv_jnt.q_cmd, this->slv_jnt.q_dest, this->slv_jnt.q_cmd_last ,this->slv_jnt.v_curr, this->slv_jnt.v_max, this->slv_jnt.a_max, this->dt);
@@ -932,9 +931,10 @@ void Teleop::updateHook(){
 			//		vector<vector<double> > valid_six_joints;
 			//		vector<vector<double> > valid_six_joints2;
 			//		ticks_temp= os::TimeService::Instance()->getTicks();
-
-			LWR4_Kinematics::validJointsForCurrentArc(this->targetmatrix, this->robot_config, this->psi_last[0], this->tool_zlength,
+			this->kine->validJointsForCurrentArc(this->targetmatrix, this->robot_config, this->psi_last[0],
 					psi_arc);
+
+
 			//		redCircle_elapset = os::TimeService::Instance()->secondsSince(ticks_temp);
 			//		std::cout << "validJoints2 (uS) : " << redCircle_elapset*1000000<< std::endl;
 
@@ -969,8 +969,9 @@ void Teleop::updateHook(){
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			//Inverse Kinematics
 			if(conversions::vectorToKDLFrame(this->slv_cart.q_cmd, this->tmp_frame)) {
-				if (LWR4_Kinematics::IK(this->tmp_frame, this->robot_config,  psi_cmd[0], this->tool_zlength, this->tmp_joint_vec)) {
+				if (this->kine->ik(this->tmp_frame, this->robot_config,  psi_cmd[0], this->tmp_joint_vec)) {
 					this->slv_jnt.q_cmd = this->tmp_joint_vec;
+
 //					this->destination_reached = false;
 				}
 				else {
@@ -1047,6 +1048,7 @@ void Teleop::stopHook() {
 
 void Teleop::cleanupHook() {
 	delete this->fo;
+	delete this->kine;
 	std::cout << "Teleop cleaning up !" <<std::endl;
 }
 
