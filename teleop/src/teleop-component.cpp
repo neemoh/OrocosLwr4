@@ -158,6 +158,7 @@ bool Teleop::configureHook(){
 	// construct the velocity filter object
 //	this->v_filt = new FOAWBestFit(10, 1/fo->dt_param, 0.0001);
 
+
 	//////////////			Using PROPERTIES			 ///////////////
 
 	this->motion_mode 				= this->motion_mode_prop;
@@ -287,6 +288,7 @@ bool Teleop::startHook(){
 
 
 void Teleop::updateHook(){
+	double manipT,manipA,manipR;
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//														Reading data
@@ -308,6 +310,7 @@ void Teleop::updateHook(){
 
 		//Forward kinematics
 		this->kine->fk(this->slv_jnt.q_curr, this->robot_config, this->ns_param.at(0), this->tmp_frame);
+
 		conversions::KDLFrameToVector(this->tmp_frame, this->tmp_cart_vec);
 		conversions::vectorToPoseMsg(this->tmp_cart_vec, this->tmp_pose_msg);
 		this->slv_frame_curr = this->tmp_frame;
@@ -318,6 +321,16 @@ void Teleop::updateHook(){
 
 		this->tmp_joint_vec = std::vector<double>(this->num_joints, 0.0); 		//Reset temporary variables
 
+
+		// manipulability indexes
+		std::vector<KDL::Frame> joint_frames(this->num_joints + 1, KDL::Frame::Identity());
+		KDL::Jacobian jac(7);
+
+		this->kine->fk_all(this->slv_jnt.q_curr, this->robot_config, this->ns_param.at(0), joint_frames);
+		this->kine->jacobian(joint_frames, jac);
+		this->kine->getManipulabilityIdx(jac, 0, manipA);
+		this->kine->getManipulabilityIdx(jac, 1, manipT);
+		this->kine->getManipulabilityIdx(jac, 2, manipR);
 	}
 
 	///////////////////////////////////////////
@@ -908,7 +921,6 @@ void Teleop::updateHook(){
 			log(RTT::Error) << "Wrong motion mode selected " << this->motion_mode << ", switching to 0 instead" << endlog();
 			this->changeMotionMode(0);
 			break;
-
 		}
 
 		///////////////////////////////////////////////////////////////////////////////////
@@ -942,6 +954,34 @@ void Teleop::updateHook(){
 			//		LWR4_Kinematics::validJointsForPsiVector( this->targetmatrix, temp_config, my_psi, this->tool_zlength, joint_four, valid_six_joints, valid_psis);
 			//		redCircle_elapset = os::TimeService::Instance()->secondsSince(ticks_temp);
 			//		std::cout << "validJoints1 (uS) : " << redCircle_elapset*1000000<< std::endl;
+
+			//			// //manipulability
+			//			std::vector<KDL::Frame> joint_frames2(this->num_joints + 1, KDL::Frame::Identity());
+			//			KDL::Jacobian jac2(7);
+			//			double manip_p, manip_n, temp_double;
+			//			unsigned int temp_int;
+			//			this->kine->ik(this->targetmatrix, this->robot_config,  this->psi_last[0]+M_PI/180, this->tmp_joint_vec);
+			//			this->kine->fk_all(this->tmp_joint_vec, temp_int, temp_double, joint_frames2);
+			//			this->kine->jacobian(joint_frames2, jac2);
+			//			this->kine->getManipulabilityIdx(jac2,0,manip_p);
+			//
+			//			this->kine->ik(this->targetmatrix, this->robot_config,  this->psi_last[0]-M_PI/180, this->tmp_joint_vec);
+			//			this->kine->fk_all(this->tmp_joint_vec, temp_int, temp_double, joint_frames2);
+			//			this->kine->jacobian(joint_frames2, jac2);
+			//			this->kine->getManipulabilityIdx(jac2,0,manip_n);
+			//
+			//			if((manip_p-manip_n)>0)
+			//				psi_chosen[0] = this->psi_last[0]+M_PI/180;
+			//			else
+			//				psi_chosen[0] = this->psi_last[0]-M_PI/180;
+			//
+			//			if (psi_chosen[0]<psi_arc[0])
+			//				psi_chosen[0] = psi_arc[0] ;
+			//			else if((psi_chosen[0]>psi_arc[1]))
+			//				psi_chosen[0] = psi_arc[1] ;
+
+
+
 
 			psi_chosen[0] = psi_arc[0] + (psi_arc[1]- psi_arc[0])/2;
 			psi_cmd = psi_chosen;
@@ -1013,6 +1053,10 @@ void Teleop::updateHook(){
 		//		this->v_filt->filter(this->slv_cart.q_cmd[0], v_foaw, ws);
 
 		conversions::vectorToTwist(this->slv_cart.v_curr, this->tmp_twist);
+		// testing:::: writing the manip indexes
+		this->tmp_twist.angular.x = manipA;
+		this->tmp_twist.angular.y = manipT;
+		this->tmp_twist.angular.z = manipR;
 
 		this->port_cart_twist.write(this->tmp_twist);
 
@@ -1021,7 +1065,6 @@ void Teleop::updateHook(){
 		//		for (unsigned int iter=0; iter < this->num_joints; iter++){
 		//			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->fo->dt_param;
 		//		}
-
 
 
 		////////////////////////////////////////////////////////////////////////////////////////
@@ -1339,17 +1382,20 @@ void Teleop::wtf(){
 	cout << "Motion mode is: "<< this->motion_mode << endl;
 	cout << "		Note: 0 = Idle, 1=PTP in joint, 2=PTP in Cartesian, 3=Tracking, 4=Tele-operation" << endl;
 	cout << "Tool length is:" << this->tool_zlength << endl;
-	cout << "Number of orientation samples averaged in teleop:" << this->rpy_avg_n << endl;
+	cout << "Number of orientation samples averaged in teleop: " << this->rpy_avg_n << endl;
 	cout << "Master/slave position coupling			 : " << this->teleop_pos_coupled << endl;
 	cout << "Master/slave orientation coupling		 : " << this->teleop_ori_coupled << endl;
-	cout << "Current joints read from the FRI(rad)   : "<< this->slv_jnt.q_curr << endl;
-	cout << "Current joints read from the FRI(deg)   : "<< conversions::radTodeg(this->slv_jnt.q_curr) << endl;
-	cout << "Current Cartesian pose (FK from joints) : "<< this->slv_cart.q_curr << endl;
+	cout << " "  << endl;
+	cout << "Current config param is				 : " << this->robot_config << endl;
+	cout << "Current arm angle is					 : " << this->ns_param.at(0) << endl;
+	cout << "Current joints read from the FRI(rad)   : " << this->slv_jnt.q_curr << endl;
+	cout << "Current joints read from the FRI(deg)   : " << conversions::radTodeg(this->slv_jnt.q_curr) << endl;
+	cout << "Current Cartesian pose (FK from joints) : " << this->slv_cart.q_curr << endl;
 		//	Reading the Cartesian pose of the robot
 	if( this->slave_cart_port.read(this->tmp_pose_msg) != RTT::NoData) {
 		conversions::poseMsgToVector(this->tmp_pose_msg, this->tmp_cart_vec);
 	}
-	cout << "Current Cartesian pose read from the FRI: "<< this->tmp_cart_vec << endl;
+	cout << "Current Cartesian pose read from the FRI: " << this->tmp_cart_vec << endl;
 	this->tmp_cart_vec = std::vector<double>(7, 0.0);
 	double r,p,y; 	this->slv_frame_curr.M.GetRPY(r,p,y);
 	cout << "Current Orientation FK (r, p, y) in degrees	: "<< r*180/M_PI <<"  "<< p*180/M_PI << "  " << y*180/M_PI << endl;

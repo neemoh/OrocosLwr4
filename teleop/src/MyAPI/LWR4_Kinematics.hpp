@@ -49,9 +49,10 @@
 #include <iostream>
 #include <cmath>
 #include <kdl/frames.hpp>
+#include <kdl/jacobian.hpp>
 #include <tf_conversions/tf_kdl.h>
-
-
+#include <Eigen/Dense>
+#include <Eigen/Core>
 
 //==============================================================================
 /*!
@@ -114,12 +115,23 @@ public:
 	// Finds the Cartesian pose, the config and psi for a given joint positions vector.
 	void fk(const std::vector<double> _q_fk, unsigned int & _config, double & _psi, KDL::Frame &cartesian_matrix);
 
+	// FK_all
+	// Finds the Cartesian pose, the config and psi for a given joint positions vector.
+	void fk_all(const std::vector<double> _q_fk, unsigned int & _config, double & _psi, std::vector<KDL::Frame> &joint_frames);
+
+	// Jacobian
+	// gets the outbput frame vector of the fk_all and calculates the
+	void jacobian( const std::vector<KDL::Frame> linkMatrices, KDL::Jacobian & jac);
+
+	// get Manipulability
+	// Calculates the manipulability index for a given Jacobian
+	// dof_param=1 : Translation index, dof_param=2 : Rotation index, else: both T and R
+	void getManipulabilityIdx(const KDL::Jacobian jac, unsigned int dof_param, double & manp_idx);
 
 	// IK METHOD
 	// Finds the joint positions q for given T, config and psi
 	bool ik(const KDL::Frame _T, const unsigned int _config, double _psi,
 			std::vector<double>& _q);
-
 
 	// Calculates valid arm angles from the current psi by simply incrementing
 	// and decrementing the current psi with 1 degree steps and checking the
@@ -132,7 +144,6 @@ public:
 	bool validJointsForPsiVector(const KDL::Frame T, const unsigned int config,
 			const std::vector<double> psi,	std::vector<std::vector<double> >& valid_joints,
 			std::vector<double>& valid_psis);
-
 
 private:
 
@@ -164,11 +175,11 @@ private:
 	// the Cartesian destination
 	KDL::Frame T;
 
-	// the joint positions calculated from IK
-	//	std::vector<double> q_ik;
-
 	// configuration parameter calculated from FK
 	unsigned int config_fk;
+
+	// number of joints
+	unsigned int n_joints;
 
 	// the arm angle (redundancy parameter) calculated from FK
 	double psi_fk;
