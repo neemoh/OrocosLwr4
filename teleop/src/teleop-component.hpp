@@ -22,7 +22,7 @@ struct filter {
 
 struct stateVar{
 	std::vector<double> q_curr, q_init, q_last, q_dest, q_cmd, q_cmd_last;
-	std::vector<double> v_curr;
+	std::vector<double> v_curr, v_last;
 	std::vector<double> q_min, q_max, v_max, a_max;
 };
 
@@ -105,6 +105,7 @@ private:
 
 	bool motionOn;
 	bool destination_reached;
+	bool teleop_interpolate_done;
 
 	bool new_cart_dest;
 	bool new_joint_dest;

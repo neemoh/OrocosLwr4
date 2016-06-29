@@ -448,7 +448,7 @@ void LWR4Kinematics::jacobian( const std::vector<KDL::Frame> joint_frames, KDL::
 
 
 //------------------------------------------------------------------------------
-// JACOBIAN
+// Manipulability
 //------------------------------------------------------------------------------
 void LWR4Kinematics::getManipulabilityIdx(const KDL::Jacobian jac, unsigned int dof_param, double & manp_idx){
 

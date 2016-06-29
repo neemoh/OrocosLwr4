@@ -89,7 +89,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->first_engagement_counter_rpy = 0;
 
 	this->destination_reached 	= true;
-	this->destination_reached 	= true;
+	this->teleop_interpolate_done= false;
 	this->motionOn 				= true;
 	this->teleop_pos_coupled	= false;
 	this->teleop_ori_coupled	= false;
@@ -197,6 +197,7 @@ bool Teleop::configureHook(){
 	this->slv_jnt.q_cmd 			=
 	this->slv_jnt.q_cmd_last 		=
 	this->slv_jnt.v_curr			=
+	this->slv_jnt.v_last			=
 	this->tmp_joint_vec 			=
 	this->h_joint					=
 	this->a1 						=
@@ -659,7 +660,7 @@ void Teleop::updateHook(){
 					//------------------------  REFERENCE FRAME TRANSFORMATIONS
 					//DELTA POSITION Reference frame transformation from master to slave
 					this->tmp_frame.p = this->mstr_to_slv_frame.M * this->tmp_frame.p ;
-					//ORIENTATION Reference frame transformation from master to slave and the desired tool oreintation
+					//ORIENTATION Reference frame transformation from master to slave and the desired tool orientation
 					// with respect to the haptic device handle
 					//					this->tmp_frame.M = this->mstr_to_slv_frame.M.Inverse() * this->tmp_frame.M * this->mstr_to_slv_frame.M;
 					this->tmp_frame.M = this->mstr_to_slv_frame.M * this->tmp_frame.M *this->master_to_tool_orient_frame.M;
@@ -749,7 +750,7 @@ void Teleop::updateHook(){
 				}
 
 			}
-			else { //If the button released
+			else { //If the clutch is released
 				this->clutch_first_time = true;
 				this->destination_reached = true;
 
@@ -1010,7 +1011,7 @@ void Teleop::updateHook(){
 			//Inverse Kinematics
 			if(conversions::vectorToKDLFrame(this->slv_cart.q_cmd, this->tmp_frame)) {
 				if (this->kine->ik(this->tmp_frame, this->robot_config,  psi_cmd[0], this->tmp_joint_vec)) {
-					this->slv_jnt.q_cmd = this->tmp_joint_vec;
+					this->slv_jnt.q_dest = this->tmp_joint_vec;
 
 //					this->destination_reached = false;
 				}
@@ -1019,6 +1020,42 @@ void Teleop::updateHook(){
 					this->tmp_joint_vec = std::vector<double>(this->num_joints, 0.0); 		//Reset temporary variables
 				}
 			}
+
+			// if in the tele-operation case the commanded joint is too far, something is wrong.
+			// to prevent the robot from locking interpolate IN JOINTS towards the destination.
+			// Mainly for debug.
+			if(this->motion_mode==4){
+				if(this->teleop_interpolate_done){
+					this->slv_jnt.q_cmd =this->slv_jnt.q_dest;
+
+					// find the maximum joint displacement
+					for (unsigned int iter=0; iter < this->num_joints; iter++){
+						this->tmp_joint_vec.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_curr.at(iter));
+					}
+					double max_diff = *( max_element(this->tmp_joint_vec.begin() , this->tmp_joint_vec.end()) );
+
+					// if the largest asked displacement is bigger than 3 degrees something is wrtong, so interpolate.
+					if (max_diff> 3*M_PI/180){
+						this->teleop_interpolate_done = false;
+
+					}
+			}
+				// no else. Check again
+				if(!this->teleop_interpolate_done){
+					cout << "Hold the clutch and don't move the master until this message stops!!" << endl;
+					variableInterpolator(
+							this->slv_jnt.q_dest, this->slv_jnt.q_cmd_last, this->slv_jnt.v_last,
+							this->slv_jnt.q_cmd, this->slv_jnt.v_curr,  this->slv_jnt.q_min,
+							this->slv_jnt.q_max, this->slv_jnt.v_max, this->slv_jnt.a_max,
+							this->teleop_interpolate_done , this->fo->dt_param) ;
+				}
+
+
+			}
+			else // if motion_mode is 2
+				this->slv_jnt.q_cmd =this->slv_jnt.q_dest;
+
+
 		}
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Writing joint position on the port
@@ -1060,11 +1097,12 @@ void Teleop::updateHook(){
 
 		this->port_cart_twist.write(this->tmp_twist);
 
+		this->slv_jnt.v_last = this->slv_jnt.v_curr;
 
-		//  	//joint vel
-		//		for (unsigned int iter=0; iter < this->num_joints; iter++){
-		//			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->fo->dt_param;
-		//		}
+		//joint vel
+		for (unsigned int iter=0; iter < this->num_joints; iter++){
+			this->slv_jnt.v_curr.at(iter) = (this->slv_jnt.q_cmd.at(iter) - this->slv_jnt.q_cmd_last.at(iter)) / this->fo->dt_param;
+		}
 
 
 		////////////////////////////////////////////////////////////////////////////////////////
@@ -1384,21 +1422,31 @@ void Teleop::wtf(){
 	cout << "Tool length is:" << this->tool_zlength << endl;
 	cout << "Number of orientation samples averaged in teleop: " << this->rpy_avg_n << endl;
 	cout << "Master/slave position coupling			 : " << this->teleop_pos_coupled << endl;
-	cout << "Master/slave orientation coupling		 : " << this->teleop_ori_coupled << endl;
-	cout << " "  << endl;
-	cout << "Current config param is				 : " << this->robot_config << endl;
-	cout << "Current arm angle is					 : " << this->ns_param.at(0) << endl;
+	cout << "Master/slave orientation coupling		 : " << this->teleop_ori_coupled <<"\n"<<endl;
+
+	cout << "Current config param is                 : " << this->robot_config << endl;
+	cout << "Current arm angle is                    : " << this->ns_param.at(0) <<"\n"<< endl;
+
 	cout << "Current joints read from the FRI(rad)   : " << this->slv_jnt.q_curr << endl;
 	cout << "Current joints read from the FRI(deg)   : " << conversions::radTodeg(this->slv_jnt.q_curr) << endl;
-	cout << "Current Cartesian pose (FK from joints) : " << this->slv_cart.q_curr << endl;
+	cout << "Last commanded joints(deg)              : " << conversions::radTodeg(this->slv_jnt.q_cmd_last) <<"\n"<< endl;
+
 		//	Reading the Cartesian pose of the robot
 	if( this->slave_cart_port.read(this->tmp_pose_msg) != RTT::NoData) {
 		conversions::poseMsgToVector(this->tmp_pose_msg, this->tmp_cart_vec);
 	}
 	cout << "Current Cartesian pose read from the FRI: " << this->tmp_cart_vec << endl;
+	cout << "Current Cartesian pose (FK from joints) : " << this->slv_cart.q_curr << endl;
+	cout << "Last commanded Cartesian                : " << this->slv_cart.q_cmd_last <<"\n"<< endl;
+
 	this->tmp_cart_vec = std::vector<double>(7, 0.0);
-	double r,p,y; 	this->slv_frame_curr.M.GetRPY(r,p,y);
-	cout << "Current Orientation FK (r, p, y) in degrees	: "<< r*180/M_PI <<"  "<< p*180/M_PI << "  " << y*180/M_PI << endl;
+	double r,p,y;
+	this->slv_frame_curr.M.GetRPY(r,p,y);
+	cout << "Current Orientation FK (r, p, y) in degrees        : "<< r*180/M_PI <<"  "<< p*180/M_PI << "  " << y*180/M_PI << endl;
+	KDL::Frame temp_frame;
+	conversions::vectorToKDLFrame(this->slv_cart.q_cmd_last,temp_frame);
+	temp_frame.M.GetRPY(r,p,y);
+	cout << "Last commanded Orientation FK (r, p, y) in degrees	: "<< r*180/M_PI <<"  "<< p*180/M_PI << "  " << y*180/M_PI << endl;
 
 }
 
