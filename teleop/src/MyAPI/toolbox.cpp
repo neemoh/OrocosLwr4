@@ -168,6 +168,24 @@ bool conversions::vectorToKDLFrame(vector<double> vector_in, KDL::Frame &kdlFram
 
 }
 
+
+geometry_msgs::Wrench conversions::createWrenchMsg(double fx, double fy, double fz, double tx, double ty, double tz){
+
+	geometry_msgs::Wrench out;
+	out.force.x = fx;
+	out.force.y = fy;
+	out.force.z = fz;
+
+	out.torque.x = tx;
+	out.torque.y = ty;
+	out.torque.z = tz;
+	return out;
+
+}
+
+
+
+
 vector<double>  conversions::radTodeg(const vector<double> in){
 	size_t size = in.size();
 

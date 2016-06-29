@@ -97,8 +97,6 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->new_cart_dest 		= false;
 	this->new_joint_dest 		= false;
 	this->clutch_first_time 	= true;
-	this->force_feedback_on		= false;
-	this->force_bias_computed	= false;
 	this->force_filter_on		= false;
 	mstr_to_slv_frame.Identity();
 
@@ -162,7 +160,6 @@ bool Teleop::configureHook(){
 	//////////////			Using PROPERTIES			 ///////////////
 
 	this->motion_mode 				= this->motion_mode_prop;
-	this->force_feedback_on 		= this->force_feedback_on_prop;
 	this->force_filter_on			= this->force_filter_on_prop;
 	this->teleop_pos_coupled		= this->teleop_pos_coupled_prop;
 	this->teleop_ori_coupled		= this->teleop_ori_coupled_prop;
@@ -216,23 +213,19 @@ bool Teleop::configureHook(){
 	this->mstr_pose_curr_filt		=
 	this->mstr_dp 					= vec_dbl(this->num_cart_var, 0.0);
 
-	this->force_filtered			=
 	this->cart_6d_last   	   		=
 	this->v_cart_6d_last 			= vec_dbl(6, 0.0);
 	this->slv_cart.v_curr 			= vec_dbl(this->num_cart_p_var, 0.0);
 
 	this->ns_param 					= std::vector<double>(1, 0.0);
 
-	this->force_bias.resize(3, 0.0);
+	this->force_bias 				= KDL::Vector::Zero();
+	this->force_filtered 			=  KDL::Vector::Zero();
+
 	this->mstr_rpy_avg.resize(3, 0.0);
 	this->mstr_deltapos_avg.resize(3, 0.0);
 
-	this->mstr_wrench_cmd.force.x =
-	this->mstr_wrench_cmd.force.y =
-	this->mstr_wrench_cmd.force.z =
-	this->mstr_wrench_cmd.torque.x =
-	this->mstr_wrench_cmd.torque.y =
-	this->mstr_wrench_cmd.torque.z = 0.0;
+	this->mstr_wrench_cmd = conversions::createWrenchMsg(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
 	this->tmp_joint_state.position.resize(num_joints, 0.0);
 	this->tmp_joint_pos.positions.resize(num_joints, 0.0);
@@ -269,6 +262,12 @@ bool Teleop::configureHook(){
 	this->dest_reached_temp = false;
 	this->new_dest_temp = true;
 	this->interp_counter_temp = 0;
+
+	this->to = new teleopC;
+	this->to->mstr_to_slv_frame = this->mstr_to_slv_frame;
+	this->to->fs_to_ee_frame = this->fs_to_ee_frame;
+	this->to->force_feedback_on = this->force_feedback_on_prop;
+
 
 	std::cout << "Teleop configured!" <<std::endl;
 	if(this->motionOn) cout<< "Motion is ON." << endl;
@@ -388,7 +387,6 @@ void Teleop::updateHook(){
 				this->slv_jnt.q_cmd = this->slv_joint_p_interpd;
 			}
 
-			this->force_bias_computed = false;
 			break;
 
 
@@ -566,26 +564,14 @@ void Teleop::updateHook(){
 				break;
 			}
 
+			//-------------------------------------------------------------------------------------
+			// Force bias
 			//Estimating current bias of the force sensor by averaging 100 consecutive samples
-			if(!force_bias_computed){
-				if (this->force_bias_counter == 0){
-					this->force_bias = vec_dbl(3, 0.0);
-					this->force_bias_counter += 1;
-				}
-				else if (this->force_bias_counter < 100) {
-					if( this->force_from_slave_port.read(this->tmp_wrench) == RTT::NewData){
-						this->force_bias[0] += this->tmp_wrench.force.x / 100;
-						this->force_bias[1] += this->tmp_wrench.force.y / 100;
-						this->force_bias[2] += this->tmp_wrench.force.z / 100;
-						this->force_bias_counter += 1;
-					}
-				}
-				else{
-					this->force_bias_computed = true;
-					this->force_bias_counter = 0;
-					log(Info) << " Force sensor bias computed:" << " x=" <<this->force_bias[0] <<  " y="<< this->force_bias[1] << " z=" << this->force_bias[2] << endlog();
-				}
+			if(this->to->force_feedback_on && this->force_from_slave_port.read(this->tmp_wrench) == RTT::NewData){
+				this->to->calculateForceBias(this->tmp_wrench);
 			}
+
+
 
 			//When the clutch is engaged slave and master are coupled.
 			//			if (this->master_button.data == 1 && force_bias_computed){
@@ -619,12 +605,7 @@ void Teleop::updateHook(){
 						temp_slv_rot.GetRPY(this->mstr_rpy_avg[0],this->mstr_rpy_avg[1],this->mstr_rpy_avg[2]);
 
 						this->mstr_deltapos_avg = vec_dbl(3,0.0);
-						// resetting the force filter array
-						// for(int i=0; i<3; i++){
-						//		force_filt[i].inp3 =	force_filt[i].inp2 =
-						//								force_filt[i].inp1 =	force_filt[i].out3 =
-						//				 				force_filt[i].out2 =	force_filt[i].out1 =	0.0;
-						// }
+
 						this->clutch_first_time = false;
 					}
 
@@ -660,6 +641,7 @@ void Teleop::updateHook(){
 					//------------------------  REFERENCE FRAME TRANSFORMATIONS
 					//DELTA POSITION Reference frame transformation from master to slave
 					this->tmp_frame.p = this->mstr_to_slv_frame.M * this->tmp_frame.p ;
+
 					//ORIENTATION Reference frame transformation from master to slave and the desired tool orientation
 					// with respect to the haptic device handle
 					//					this->tmp_frame.M = this->mstr_to_slv_frame.M.Inverse() * this->tmp_frame.M * this->mstr_to_slv_frame.M;
@@ -668,6 +650,7 @@ void Teleop::updateHook(){
 					//------------------------ Position is incremental
 					if(this->teleop_pos_coupled) this->slv_frame_dest.p = this->slv_frame_init.p + this->tmp_frame.p;
 					else 						 this->slv_frame_dest.p = this->slv_frame_init.p;
+
 					//------------------------ Orientation is absolute
 					if(this->teleop_ori_coupled) this->slv_frame_dest.M	= this->tmp_frame.M;
 					else	  					 this->slv_frame_dest.M	= this->slv_frame_init.M;
@@ -682,78 +665,22 @@ void Teleop::updateHook(){
 					conversions::vectorToPoseMsg(this->slv_cart.q_cmd, this->tmp_pose_msg);
 					this->cart_command_port.write(this->tmp_pose_msg);
 
-					/////////////////////////////////////// Calculating force
-					if (this->force_feedback_on){
-						//Measured force
-						if( this->force_from_slave_port.read(this->tmp_wrench) != RTT::NoData){
+					//-------------------------------------------------------------------------------------
+					// Force measurement, scaling and transformation.
+					if (this->to->force_feedback_on)//Measured force
+						this->force_from_slave_port.read(this->tmp_wrench);
 
-							this->tmp_cart_vec[0] = this->tmp_wrench.force.x ;
-							this->tmp_cart_vec[1] = this->tmp_wrench.force.y ;
-							this->tmp_cart_vec[2] = -this->tmp_wrench.force.z ;
-
-							if(this->force_filter_on)
-							{
-								for(int i=0; i<3; i++){
-									this->force_filtered[i] = (.2196*(tmp_cart_vec[i]+force_filt[i].inp3)+.6588*(force_filt[i].inp1+force_filt[i].inp2))/1000.0-(-2.7488*force_filt[i].out1+2.5282*force_filt[i].out2 - 0.7776*force_filt[i].out3);  //cutoff freq of 20 Hz
-
-									this->force_filt[i].inp3 =		this->force_filt[i].inp2;
-									this->force_filt[i].inp2 =		this->force_filt[i].inp1;
-									this->force_filt[i].inp1 =		this->tmp_cart_vec[i];
-									this->force_filt[i].out3 =		this->force_filt[i].out2;
-									this->force_filt[i].out2 =		this->force_filt[i].out1;
-									this->force_filt[i].out1 =		this->force_filtered[i];
-
-								}
-								this->tmp_cart_vec = vec_dbl(this->num_cart_var, 0.0);
-
-								this->tmp_frame.p[0] = this->force_scale * (this->force_filtered[0] - this->force_bias[0]);
-								this->tmp_frame.p[1] = this->force_scale  * (this->force_filtered[1] - this->force_bias[1]);
-								this->tmp_frame.p[2] = this->force_scale  * (this->force_filtered[2] - this->force_bias[2]);
-							}
-
-							else {////No FILTERING
-								this->tmp_frame.p[0] = this->force_scale  * (this->tmp_cart_vec[0] - this->force_bias[0]);
-								this->tmp_frame.p[1] = this->force_scale  * (this->tmp_cart_vec[1] - this->force_bias[1]);
-								this->tmp_frame.p[2] = this->force_scale  * (this->tmp_cart_vec[2] - this->force_bias[2]);
-
-								this->tmp_cart_vec = vec_dbl(this->num_cart_var, 0.0);
-							}
-						}
-						else{ //Virtual spring
-							double k = 1000;
-							this->tmp_frame.p[0] = -k * (this->slv_cart.q_cmd[0] - this->slv_cart.q_curr[0]);
-							this->tmp_frame.p[1] = -k * (this->slv_cart.q_cmd[1] - this->slv_cart.q_curr[1]);
-							this->tmp_frame.p[2] = -k * (this->slv_cart.q_cmd[2] - this->slv_cart.q_curr[2]);
-
-						}
-
-						//Taking the forces to the master's reference frame
-						this->tmp_frame.p = this->mstr_to_slv_frame.M.Inverse() * this->slv_frame_curr.M * this->fs_to_ee_frame.M.Inverse() * this->tmp_frame.p ;
-
-
-						this->mstr_wrench_cmd.force.x = this->tmp_frame.p[0];
-						this->mstr_wrench_cmd.force.y = this->tmp_frame.p[1];
-						this->mstr_wrench_cmd.force.z = this->tmp_frame.p[2];
-					}
-					else{//If the force is disabled
-						this->mstr_wrench_cmd.force.x = 0.0;
-						this->mstr_wrench_cmd.force.y = 0.0;
-						this->mstr_wrench_cmd.force.z = 0.0;
-					}
-
+					this->mstr_wrench_cmd = this->to->getForceFeedback(this->slv_frame_curr, this->mstr_wrench_cmd);
+					// writing force on the port
 					this->force_to_master_port.write(this->mstr_wrench_cmd);
 
 				}
 				else
-				{
 					log(Error) << " No new readings from: " << this->cart_dest_port.getName()  << endlog();
-				}
-
 			}
 			else { //If the clutch is released
 				this->clutch_first_time = true;
 				this->destination_reached = true;
-
 			}
 
 			break;
@@ -1268,7 +1195,7 @@ bool Teleop::stopMotion() {
 	}
 
 	this->motionOn = false;
-	this->force_bias_computed = false;
+	this->to->force_bias_computed = false;
 
 	log(RTT::Info) << "Motion mode stopped!" << endlog();
 	return true;
@@ -1385,13 +1312,13 @@ bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 ///------------------------------------------------------------------------------------------------------------------------------------
 void Teleop::switchForceFeedback(bool input){
 	Logger::In in(this->getName());
-	if(this->force_feedback_on == input){
+	if(this->to->force_feedback_on == input){
 		log(RTT::Info) << "No change needed." << endlog();
 		return;
 	}
-	this->force_feedback_on = input;
-	if(this->force_feedback_on)	log(RTT::Info) << "Force feedback is turned On." << endlog();
-	if(!this->force_feedback_on)	log(RTT::Info) << "Force feedback is turned Off." << endlog();
+	this->to->force_feedback_on = input;
+	if(this->to->force_feedback_on)	log(RTT::Info) << "Force feedback is turned On." << endlog();
+	if(!this->to->force_feedback_on)	log(RTT::Info) << "Force feedback is turned Off." << endlog();
 
 }
 
@@ -1403,8 +1330,8 @@ void Teleop::forceFilterSwitch() {
 
 ///------------------------------------------------------------------------------------------------------------------------------------
 void Teleop::forceSensorCalib() {
-	this->force_bias = vec_dbl(3, 0.0);
-	this->force_bias_computed = false;
+	this->force_bias = KDL::Vector::Zero();
+	this->to->force_bias_computed = false;
 }
 
 ///------------------------------------------------------------------------------------------------------------------------------------
@@ -1649,5 +1576,64 @@ bool Teleop::P2PInterpolator(const vec_dbl p_dest, const vec_dbl p_init, vec_dbl
 
 }
 
+teleopC::teleopC(){
+
+	force_bias_computed = false;
+	force_feedback_on = false;
+	force_bias_counter = 0;
+	force_scale = 1;
+
+}
+
+void teleopC::calculateForceBias(geometry_msgs::Wrench wrench_msrd){
+
+	//Estimating current bias of the force sensor by averaging 100 consecutive samples
+	if(!force_bias_computed){
+		if (this->force_bias_counter == 0){
+			this->force_bias = KDL::Vector::Zero();
+			this->force_bias_counter += 1;
+		}
+		else if (this->force_bias_counter < 100) {
+			this->force_bias[0] += wrench_msrd.force.x / 100;
+			this->force_bias[1] += wrench_msrd.force.y / 100;
+			this->force_bias[2] += wrench_msrd.force.z / 100;
+			this->force_bias_counter += 1;
+		}
+		else{
+			this->force_bias_computed = true;
+			this->force_bias_counter = 0;
+			log(Info) << " Force sensor bias computed:" << " x=" <<this->force_bias[0] <<  " y="<< this->force_bias[1] << " z=" << this->force_bias[2] << endlog();
+		}
+	}
+
+}
+
+geometry_msgs::Wrench teleopC::getForceFeedback(KDL::Frame robot_pose, geometry_msgs::Wrench wrench_msrd){
+
+	/////////////////////////////////////// Calculating force
+	KDL::Vector force_msrd;
+	KDL::Vector force_scaled;
+	KDL::Vector force_out;
+
+	if (force_feedback_on){
+		// save the measurements in a kdl vector
+		force_msrd = KDL::Vector(wrench_msrd.force.x, wrench_msrd.force.y, wrench_msrd.force.z);
+		//			// remove the bias and scale the force
+		//			if(force_filter_on) // have removed the filtering where force_filtered was calculated
+		//				force_scaled = force_scale  * (this->force_filtered - this->force_bias);
+		//			else ////No FILTERING
+		force_scaled = force_scale  * (force_msrd - force_bias);
+
+		//Taking the forces to the master's reference frame
+		force_out = this->mstr_to_slv_frame.M.Inverse() * robot_pose.M * fs_to_ee_frame.M.Inverse() * force_scaled ;
+		//
+	}
+	else//If the force is disabled
+		force_out = KDL::Vector::Zero();
+
+	return( conversions::createWrenchMsg(force_out[0], force_out[1], force_out[2], 0.0,0.0,0.0));
+
+
+}
 
 ORO_CREATE_COMPONENT(Teleop)

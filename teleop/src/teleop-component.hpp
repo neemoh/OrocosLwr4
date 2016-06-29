@@ -28,6 +28,30 @@ struct stateVar{
 
 
 //-------------------------------------------------------------------------------------
+// CLASS: teleoperation
+//-------------------------------------------------------------------------------------
+
+class teleopC{
+public:
+
+	teleopC();
+	void calculateForceBias(geometry_msgs::Wrench wrench_msrd);
+	geometry_msgs::Wrench getForceFeedback(KDL::Frame robot_pose, geometry_msgs::Wrench wrench_msrd);
+
+public: // force related variables
+	bool force_bias_computed;
+	bool force_feedback_on;
+	unsigned int force_bias_counter;
+	double force_scale;
+
+	// transformations
+	KDL::Frame mstr_to_slv_frame;
+	KDL::Frame fs_to_ee_frame;
+private:
+	KDL::Vector force_bias;
+
+};
+//-------------------------------------------------------------------------------------
 // CLASS: freqObserver
 //-------------------------------------------------------------------------------------
 class freqObserver{
@@ -102,6 +126,7 @@ private:
 
 	// frequency observer object pointer
 	freqObserver * fo;
+	teleopC * to;
 
 	bool motionOn;
 	bool destination_reached;
@@ -155,7 +180,7 @@ private:
 	unsigned int interp_counter;										//Counter is used for PTP interpolator instead of dt_real
 
 	//******************************************  Tracking and teleop variables
-	bool force_feedback_on, force_bias_computed, force_filter_on, teleop_pos_coupled,teleop_ori_coupled;
+	bool  force_filter_on, teleop_pos_coupled,teleop_ori_coupled;
 	double force_scale, transl_scale;
 	double first_engagement_counter_rpy, first_engagement_counter_pos;
 	double rpy_avg_n, rpy_avg_n_variable;
@@ -166,10 +191,10 @@ private:
 
 	std_msgs::Int8 master_clutch, tmp_button;
 	KDL::Frame mstr_frame_curr, mstr_frame_init, slv_kdl_cmd , slv_frame_curr, slv_frame_init, slv_frame_dest;
-	filter pos_filt[3], force_filt[3];
+	filter pos_filt[3];
 
 	unsigned int force_bias_counter;
-	std::vector<double> force_bias, force_filtered;
+	KDL::Vector force_bias, force_filtered;
 	geometry_msgs::Wrench tmp_wrench,  mstr_wrench_cmd;
 	KDL::Frame fs_to_ee_frame, mstr_to_slv_frame, master_to_tool_orient_frame;
 
