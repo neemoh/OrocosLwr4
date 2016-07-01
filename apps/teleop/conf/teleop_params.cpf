@@ -3,8 +3,8 @@
 <!-- Properties of the Position-Generator component -->
 <properties>
 	<simple name="time_period" type="double"><description>frame rate</description><value>0.005</value></simple>
-	<simple name="motion_mode" type="long"><description>Motion mode</description><value>1</value></simple>
-	<simple name="force_feedback_on" type="long"><description>Force feedback</description><value>1</value></simple>
+	<simple name="motion_mode" type="long"><description>Motion mode</description><value>4</value></simple>
+	<simple name="force_feedback_on" type="long"><description>Force feedback</description><value>0</value></simple>
 	<simple name="force_filter_on" type="long"><description>Force filter</description><value>0</value></simple>
 	<simple name="teleop_pos_coupled" type="long"><description>master slave position coupling</description><value>1</value></simple>
 	<simple name="teleop_ori_coupled" type="long"><description>master slave orientation coupling</description><value>1</value></simple>
@@ -37,153 +37,100 @@
 
 	<struct name="tr_master_to_tool_orient" type="array">
 		<description>Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order) </description>
-		<simple name="Element0" type="double"><description>qx</description><value> 0.0</value></simple>
+	<!--	<simple name="Element0" type="double"><description>qx</description><value> 0.0</value></simple>
 		<simple name="Element1" type="double"><description>qy</description><value>-0.7071</value></simple>
 		<simple name="Element2" type="double"><description>qz</description><value> 0.0</value></simple>
 		<simple name="Element3" type="double"><description>qw</description><value> 0.7071</value></simple>
-	</struct>
-	<struct name="palpation_home_3dpose" type="array">
-		<description>palpation_init_6dpose</description>
-		<simple name="Element0" type="double"><description>Joint 1</description><value>-0.413</value></simple>
-		<simple name="Element1" type="double"><description>Joint 2</description><value> 0.313</value></simple>
-		<simple name="Element2" type="double"><description>Joint 3</description><value> 0.25</value></simple>
-	<!--	<simple name="Element3" type="double"><description>Joint 4</description><value> 180.0</value></simple>
-		<simple name="Element4" type="double"><description>Joint 5</description><value> 0.0</value></simple>
-		<simple name="Element5" type="double"><description>Joint 6</description><value> 90.0</value></simple>
-	-->
-	</struct>
-
-	<struct name="palpation_init_3dpose" type="array">
-		<description>palpation_init_6dpose</description>
-		<simple name="Element0" type="double"><description>Joint 1</description><value>-0.418</value></simple>
-		<simple name="Element1" type="double"><description>Joint 2</description><value> 0.315</value></simple>
-		<simple name="Element2" type="double"><description>Joint 3</description><value> 0.152</value></simple>
-	<!--	<simple name="Element3" type="double"><description>Joint 4</description><value> 180.0</value></simple>
-		<simple name="Element4" type="double"><description>Joint 5</description><value> 0.0</value></simple>
-		<simple name="Element5" type="double"><description>Joint 6</description><value> 90.0</value></simple>
-	-->
-	</struct>
-
+	-->	<simple name="Element0" type="double"><description>qx</description><value>-1.0</value></simple>
+		<simple name="Element1" type="double"><description>qy</description><value> 0.0</value></simple>
+		<simple name="Element2" type="double"><description>qz</description><value> 0.0</value></simple>
+		<simple name="Element3" type="double"><description>qw</description><value> 0.0</value></simple>	</struct>
 	<struct name="slv_home_joint" type="array">
 		<description>Home joint configuration</description>
-		<simple name="Element0" type="double"><description>Joint 1</description><value>-0.26</value></simple>
-		<simple name="Element1" type="double"><description>Joint 2</description><value> 0.56</value></simple>
-		<simple name="Element2" type="double"><description>Joint 3</description><value> 0.77</value></simple>
-		<simple name="Element3" type="double"><description>Joint 4</description><value>-1.26</value></simple>
-		<simple name="Element4" type="double"><description>Joint 5</description><value> 1.26</value></simple>
-		<simple name="Element5" type="double"><description>Joint 6</description><value> 1.08</value></simple>
-		<simple name="Element6" type="double"><description>Joint 7</description><value>-1.69</value></simple>
+		<simple name="Element0" type="double"><description>j 1</description><value> 2.0</value></simple>
+		<simple name="Element1" type="double"><description>j 2</description><value>-0.5</value></simple>
+		<simple name="Element2" type="double"><description>j 3</description><value>-0.3</value></simple>
+		<simple name="Element3" type="double"><description>j 4</description><value> 1.5</value></simple>
+		<simple name="Element4" type="double"><description>j 5</description><value> 0.2</value></simple>
+		<simple name="Element5" type="double"><description>j 6</description><value>-1.2</value></simple>
+		<simple name="Element6" type="double"><description>j 7</description><value>-0.6</value></simple>
 	</struct>
 
 	<struct name="max_joint_vars" type="array">
 		<description>Max joint limits</description>
-		<simple name="Element0" type="double"><description>Joint 1</description><value>2.95</value></simple>
-		<simple name="Element1" type="double"><description>Joint 2</description><value>2.08</value></simple>
-		<simple name="Element2" type="double"><description>Joint 3</description><value>2.95</value></simple>
-		<simple name="Element3" type="double"><description>Joint 4</description><value>2.08</value></simple>
-		<simple name="Element4" type="double"><description>Joint 5</description><value>2.95</value></simple>
-		<simple name="Element5" type="double"><description>Joint 6</description><value>2.08</value></simple>
-		<simple name="Element6" type="double"><description>Joint 7</description><value>2.95</value></simple>
+		<simple name="Element0" type="double"><description>j 1</description><value>2.95</value></simple>
+		<simple name="Element1" type="double"><description>j 2</description><value>2.08</value></simple>
+		<simple name="Element2" type="double"><description>j 3</description><value>2.95</value></simple>
+		<simple name="Element3" type="double"><description>j 4</description><value>2.08</value></simple>
+		<simple name="Element4" type="double"><description>j 5</description><value>2.95</value></simple>
+		<simple name="Element5" type="double"><description>j 6</description><value>2.08</value></simple>
+		<simple name="Element6" type="double"><description>j 7</description><value>2.95</value></simple>
 	</struct>
 	<struct name="min_joint_vars" type="array">
 		<description>Min joint limits</description>
-		<simple name="Element0" type="double"><description>Joint 1</description><value>-2.95</value></simple>
-		<simple name="Element1" type="double"><description>Joint 2</description><value>-2.08</value></simple>
-		<simple name="Element2" type="double"><description>Joint 3</description><value>-2.95</value></simple>
-		<simple name="Element3" type="double"><description>Joint 4</description><value>-2.08</value></simple>
-		<simple name="Element4" type="double"><description>Joint 5</description><value>-2.95</value></simple>
-		<simple name="Element5" type="double"><description>Joint 6</description><value>-2.08</value></simple>
-		<simple name="Element6" type="double"><description>Joint 7</description><value>-2.95</value></simple>
+		<simple name="Element0" type="double"><description>j 1</description><value>-2.95</value></simple>
+		<simple name="Element1" type="double"><description>j 2</description><value>-2.08</value></simple>
+		<simple name="Element2" type="double"><description>j 3</description><value>-2.95</value></simple>
+		<simple name="Element3" type="double"><description>j 4</description><value>-2.08</value></simple>
+		<simple name="Element4" type="double"><description>j 5</description><value>-2.95</value></simple>
+		<simple name="Element5" type="double"><description>j 6</description><value>-2.08</value></simple>
+		<simple name="Element6" type="double"><description>j 7</description><value>-2.95</value></simple>
 	</struct>	
 	<struct name="max_joint_vel" type="array">
 		<description>Max joint velocity</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>0.50</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>0.50</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>0.50</value></simple>
-		<simple name="Element3" type="double"><description>Variable 4</description><value>0.50</value></simple>
-		<simple name="Element4" type="double"><description>Variable 5</description><value>0.50</value></simple>
-		<simple name="Element5" type="double"><description>Variable 6</description><value>0.50</value></simple>
-		<simple name="Element6" type="double"><description>Variable 7</description><value>0.50</value></simple>
+		<simple name="Element0" type="double"><description>jvel1</description><value>0.50</value></simple>
+		<simple name="Element1" type="double"><description>jvel2</description><value>0.50</value></simple>
+		<simple name="Element2" type="double"><description>jvel3</description><value>0.50</value></simple>
+		<simple name="Element3" type="double"><description>jvel4</description><value>0.50</value></simple>
+		<simple name="Element4" type="double"><description>jvel5</description><value>0.50</value></simple>
+		<simple name="Element5" type="double"><description>jvel6</description><value>0.50</value></simple>
+		<simple name="Element6" type="double"><description>jvel7</description><value>0.50</value></simple>
 	</struct>
 	<struct name="max_joint_acc" type="array">
 		<description>Max joint acceleration</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>0.20</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>0.20</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>0.20</value></simple>
-		<simple name="Element3" type="double"><description>Variable 4</description><value>0.20</value></simple>
-		<simple name="Element4" type="double"><description>Variable 5</description><value>0.20</value></simple>
-		<simple name="Element5" type="double"><description>Variable 6</description><value>0.20</value></simple>
-		<simple name="Element6" type="double"><description>Variable 7</description><value>0.20</value></simple>
+		<simple name="Element0" type="double"><description>jacc1</description><value>2.00</value></simple>
+		<simple name="Element1" type="double"><description>jacc2</description><value>2.00</value></simple>
+		<simple name="Element2" type="double"><description>jacc3</description><value>2.00</value></simple>
+		<simple name="Element3" type="double"><description>jacc4</description><value>2.00</value></simple>
+		<simple name="Element4" type="double"><description>jacc5</description><value>2.00</value></simple>
+		<simple name="Element5" type="double"><description>jacc6</description><value>2.00</value></simple>
+		<simple name="Element6" type="double"><description>jacc7</description><value>2.00</value></simple>
 	</struct>
 	<struct name="max_cart_vars" type="array">
 		<description>Maximum allowed value</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>1.5</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>1.5</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>1.5</value></simple>
+		<simple name="Element0" type="double"><description>x</description><value>1.5</value></simple>
+		<simple name="Element1" type="double"><description>y</description><value>1.5</value></simple>
+		<simple name="Element2" type="double"><description>z</description><value>1.5</value></simple>		
+		<simple name="Element3" type="double"><description>r</description><value>10</value></simple>
+		<simple name="Element4" type="double"><description>p</description><value>10</value></simple>
+		<simple name="Element5" type="double"><description>y</description><value>10</value></simple>
 	</struct>
 	<struct name="min_cart_vars" type="array">
 		<description>Minumum allowed value</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>-1.5</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>-1.5</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>-1.5</value></simple>
-
+		<simple name="Element0" type="double"><description>x</description><value>-1.5</value></simple>
+		<simple name="Element1" type="double"><description>y</description><value>-1.5</value></simple>
+		<simple name="Element2" type="double"><description>z</description><value>-1.5</value></simple>
+		<simple name="Element3" type="double"><description>r</description><value>-10</value></simple>
+		<simple name="Element4" type="double"><description>p</description><value>-10</value></simple>
+		<simple name="Element5" type="double"><description>y</description><value>-10</value></simple>
 	</struct>
 	
 	<struct name="max_cart_vel" type="array">
 		<description>Maximum allowed velocity</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>0.20</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>0.20</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>0.20</value></simple>
+		<simple name="Element0" type="double"><description>linear vel x</description><value>0.30</value></simple>
+		<simple name="Element1" type="double"><description>linear vel x</description><value>0.30</value></simple>
+		<simple name="Element2" type="double"><description>linear vel x</description><value>0.30</value></simple>
+		<simple name="Element3" type="double"><description>Angular vel r</description><value>0.30</value></simple>
+		<simple name="Element4" type="double"><description>Angular vel p</description><value>0.30</value></simple>
+		<simple name="Element5" type="double"><description>Angular vel y</description><value>0.30</value></simple>
 	</struct>
 	<struct name="max_cart_acc" type="array">
 		<description>Maximum allowed acceleration</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>0.02</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>0.02</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>0.02</value></simple>
+		<simple name="Element0" type="double"><description>linear acc x</description><value>0.30</value></simple>
+		<simple name="Element1" type="double"><description>linear acc x</description><value>0.30</value></simple>
+		<simple name="Element2" type="double"><description>linear acc x</description><value>0.30</value></simple>
+		<simple name="Element3" type="double"><description>Angular acc r</description><value>0.30</value></simple>
+		<simple name="Element4" type="double"><description>Angular acc p</description><value>0.30</value></simple>
+		<simple name="Element5" type="double"><description>Angular acc y</description><value>0.30</value></simple>
 	</struct>
-
-	
-<!--	
-	<struct name="max_cart_vars" type="array">
-		<description>Maximum allowed value</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>1.0</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>1.0</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>1.0</value></simple>
-		<simple name="Element3" type="double"><description>Variable 4</description><value>1.0</value></simple>
-		<simple name="Element4" type="double"><description>Variable 5</description><value>1.0</value></simple>
-		<simple name="Element5" type="double"><description>Variable 6</description><value>1.0</value></simple>
-		<simple name="Element6" type="double"><description>Variable 7</description><value>1.0</value></simple>
-	</struct>
-	<struct name="min_cart_vars" type="array">
-		<description>Minumum allowed value</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>-1.0</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>-1.0</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>-1.0</value></simple>
-		<simple name="Element3" type="double"><description>Variable 3</description><value>-1.0</value></simple>
-		<simple name="Element4" type="double"><description>Variable 3</description><value>-1.0</value></simple>
-		<simple name="Element5" type="double"><description>Variable 3</description><value>-1.0</value></simple>
-		<simple name="Element6" type="double"><description>Variable 3</description><value>-1.0</value></simple>
-	</struct>
-	
-	<struct name="max_cart_vel" type="array">
-		<description>Maximum allowed velocity</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>0.90</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>0.90</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element3" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element4" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element5" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element6" type="double"><description>Variable 3</description><value>0.90</value></simple>
-	</struct>
-	<struct name="max_cart_acc" type="array">
-		<description>Maximum allowed acceleration</description>
-		<simple name="Element0" type="double"><description>Variable 1</description><value>0.90</value></simple>
-		<simple name="Element1" type="double"><description>Variable 2</description><value>0.90</value></simple>
-		<simple name="Element2" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element3" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element4" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element5" type="double"><description>Variable 3</description><value>0.90</value></simple>
-		<simple name="Element6" type="double"><description>Variable 3</description><value>0.90</value></simple>
-	</struct>
--->
 </properties>

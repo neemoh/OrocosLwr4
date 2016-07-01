@@ -57,4 +57,10 @@ static ostream& operator<<(ostream& out, const vector<double>& vect){
 	return out;
 }
 
+static ostream& operator<<(ostream& out, const KDL::Vector& kdlV){
+	for (unsigned int iter = 0; iter < 3; ++iter) {
+		out << "[" << iter <<"]: "<<kdlV[iter] << "\t";
+	}
+	return out;
+}
 #endif /* TOOLBOX_HPP_ */

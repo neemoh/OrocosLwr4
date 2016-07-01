@@ -47,7 +47,7 @@
 		<struct name="Ports" type="PropertyBag">
 
 			<simple name="inputMasterClutch" type="string"><value>master_pedal</value></simple>
-			<simple name="inputCartDestination" type="string"><value>master_pose</value></simple>
+			<simple name="inputMasterPose" type="string"><value>master_pose</value></simple>
 			<simple name="inputJointCurrent" type="string"><value>FRI_JointStateOut</value></simple>
 			<simple name="inputSlaveCart" type="string"><value>FRI_CartesianPositionOut</value></simple>
 			<simple name="outputJointPos" type="string"><value>FRI_jointCommand</value></simple>	
