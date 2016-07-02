@@ -17,6 +17,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addEventPort("inputJointCurrent", this->joint_msrd_port).doc("Readings of the pose from PhanomOmni");
 	this->addPort("inputMasterPose", this->master_msrd_pose_port).doc("Output of the pose to Sigma");
 	this->addPort("inputSlaveCart", this->slave_cart_port).doc("Output of the pose to Sigma");
+	this->addPort("inputCamToSlavePose", this->cam_to_slave_pose_port).doc("Output of the pose to Sigma");
 
 	this->addPort("inputMasterClutch", this->master_clutch_port).doc("Output of the pose to Sigma");
 	this->addPort("forceToMaster", this->force_to_master_port).doc("Readings of the pose from Sigma");
@@ -67,6 +68,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addOperation("switchPositionCoupling", 	&Teleop::switchPositionCoupling, 	this).doc("Switches the master/slave coupling of position. On or Off");
 	this->addOperation("switchOrientationCoupling",	&Teleop::switchOrientationCoupling,	this).doc("Switches the master/slave coupling of orientation. On or Off");
 	this->addOperation("setOrientationAvgWindow",	&Teleop::setOrientationAvgWindow,	this).doc("Switches the master/slave coupling of orientation. On or Off");
+	this->addOperation("updateCam2SlavePose",		&Teleop::updateCam2SlavePose,		this).doc("Updates the transformation between the camera and the slaveor Off");
 
 
 	this->num_joints				= 7;
@@ -84,7 +86,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->new_cart_dest 			= false;
 	this->force_filter_on			= false;
 
-	mstr_to_slv_frame.Identity();
+	this->mstr_to_slv_backup_rotation.Identity();
 
 	std::cout << "Teleop constructed!" <<std::endl;
 }
@@ -180,9 +182,9 @@ bool Teleop::configureHook(){
 	this->cart_FK_port.setDataSample(this->tmp_pose_msg);
 
 	// build the constant transformations
-	this->mstr_to_slv_frame.M			= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
-	this->fs_to_ee_frame.M				= KDL::Rotation::Quaternion(this->fs_to_ee_frame_prop[0], this->fs_to_ee_frame_prop[1], this->fs_to_ee_frame_prop[2], this->fs_to_ee_frame_prop[3]);
-	this->master_to_tool_orient_frame.M	= KDL::Rotation::Quaternion(this->master_to_tool_orient_frame_prop[0], this->master_to_tool_orient_frame_prop[1], this->master_to_tool_orient_frame_prop[2], this->master_to_tool_orient_frame_prop[3]);
+	this->mstr_to_slv_backup_rotation	= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
+	this->fs_to_ee_rotation				= KDL::Rotation::Quaternion(this->fs_to_ee_frame_prop[0], this->fs_to_ee_frame_prop[1], this->fs_to_ee_frame_prop[2], this->fs_to_ee_frame_prop[3]);
+	this->master_to_tool_orient_rotation= KDL::Rotation::Quaternion(this->master_to_tool_orient_frame_prop[0], this->master_to_tool_orient_frame_prop[1], this->master_to_tool_orient_frame_prop[2], this->master_to_tool_orient_frame_prop[3]);
 
 
 	// set the initial sleep time of the freq observer to 1 seconds
@@ -212,9 +214,9 @@ bool Teleop::configureHook(){
 			this->pos_avg_n_prop,
 			this->force_scale_prop,
 			this->force_feedback_on_prop,
-			this->mstr_to_slv_frame,
-			this->fs_to_ee_frame,
-			this->master_to_tool_orient_frame);
+			this->mstr_to_slv_backup_rotation,
+			this->fs_to_ee_rotation,
+			this->master_to_tool_orient_rotation);
 
 
 	std::cout << "Teleop configured!" <<std::endl;
@@ -229,6 +231,8 @@ bool Teleop::startHook(){
 
 	if(this->isRunning())
 		return false;
+
+//	this->updateCam2SlavePose();
 
 	return true;
 }
@@ -726,6 +730,38 @@ bool Teleop::startMotion() {
 
 }
 
+
+
+
+void Teleop::updateCam2SlavePose(){
+
+	Logger::In in(this->getName());
+
+	geometry_msgs::Pose pose_in;
+
+	// reading the cam to slave data if available
+	if (this->cam_to_slave_pose_port.connected() && this->cam_to_slave_pose_port.read(pose_in) != RTT::NoData ){
+
+		// converting the quaternion to kdlRotation
+		KDL::Rotation rot_in = KDL::Rotation::Quaternion(pose_in.orientation.x, pose_in.orientation.y,
+				pose_in.orientation.z, pose_in.orientation.w);
+
+		// setting the value in the teleop object
+		this->to->setCam2SlaveRotation(rot_in);
+
+		// notify the user
+		log(RTT::Info)<< " Updated the camera to slave transformation." << endlog();
+
+	}
+	else{
+		log(RTT::Warning)<< "Port " << this->cam_to_slave_pose_port.getName() << " is not connected. Using backup cam to master rotation" << endlog();
+
+	}
+
+
+}
+
+
 ///------------------------------------------------------------------------------------------------------------------------------------
 bool Teleop::changeMotionMode(const int mode) {
 	Logger::In in(this->getName());
@@ -1176,9 +1212,9 @@ bool ptpInterpolator::interpolate(const std::vector<double> p_dest, const std::v
 //--------------------------------------------------------------------------------------------------
 // 						TELEOP CLASS
 //--------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 // teleop constructor
-//-------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 teleopC::teleopC(double _period,
 		double _transl_scale,
 		bool _teleop_ori_coupled,
@@ -1187,21 +1223,29 @@ teleopC::teleopC(double _period,
 		double _pos_avg_n,
 		double _force_scale,
 		bool _force_feedback_on,
-		KDL::Frame _mstr_to_slv_frame,
-		KDL::Frame _fs_to_ee_frame,
-		KDL::Frame _master_to_tool_orient_frame){
+		KDL::Rotation _mstr_to_slv_frame,
+		KDL::Rotation _fs_to_ee_frame,
+		KDL::Rotation _master_to_tool_orient_frame){
 
-	dt_param = _period;
-	transl_scale = _transl_scale;
-	teleop_ori_coupled = _teleop_ori_coupled;
-	teleop_pos_coupled = _teleop_pos_coupled;
-	rpy_avg_n = _rpy_avg_n;
-	pos_avg_n = _pos_avg_n;
-	force_scale = _force_scale;
-	force_feedback_on = _force_feedback_on;
-	mstr_to_slv_frame = _mstr_to_slv_frame;
-	fs_to_ee_frame = _fs_to_ee_frame;
-	master_to_tool_orient_frame = _master_to_tool_orient_frame;
+	dt_param 					= _period;
+	transl_scale 				= _transl_scale;
+	teleop_ori_coupled 			= _teleop_ori_coupled;
+	teleop_pos_coupled 			= _teleop_pos_coupled;
+	rpy_avg_n 					= _rpy_avg_n;
+	pos_avg_n 					= _pos_avg_n;
+	force_scale 				= _force_scale;
+	force_feedback_on 			= _force_feedback_on;
+
+	mstr_to_slv_rotation 		= _mstr_to_slv_frame;
+	mstr_to_slv_rotation_backup = _mstr_to_slv_frame;
+
+	fs_to_ee_rotation = _fs_to_ee_frame;
+	mstr_to_tool_orient_rotation = _master_to_tool_orient_frame;
+
+	// mstr_to_camthis is the transformation from the Sigma device to the camera image plane.
+	// the image +x direction is from left to right of the screen, and +y is from
+	// top to bottom.
+	mstr_to_cam_rotation = KDL::Rotation::Quaternion(0.5, 0.5, -0.5, 0.5);
 
 	first_engagement_counter_rpy =0;
 	first_engagement_counter_pos = 0;
@@ -1218,9 +1262,9 @@ teleopC::teleopC(double _period,
 }
 
 
-//-------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 // calculateForceBias
-//-------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 void teleopC::calculateForceBias(geometry_msgs::Wrench wrench_msrd){
 
 	//Estimating current bias of the force sensor by averaging 100 consecutive samples
@@ -1250,9 +1294,9 @@ void teleopC::resetForceBias(){
 	force_bias_computed = false;
 }
 
-//-------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 // getForceFeedback
-//-------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 geometry_msgs::Wrench teleopC::getForceFeedback(KDL::Frame robot_pose, geometry_msgs::Wrench wrench_msrd){
 
 	/////////////////////////////////////// Calculating force
@@ -1270,7 +1314,7 @@ geometry_msgs::Wrench teleopC::getForceFeedback(KDL::Frame robot_pose, geometry_
 		force_scaled = force_scale  * (force_msrd - force_bias);
 
 		//Taking the forces to the master's reference frame
-		force_out = this->mstr_to_slv_frame.M.Inverse() * robot_pose.M * fs_to_ee_frame.M.Inverse() * force_scaled ;
+		force_out = this->mstr_to_slv_rotation.Inverse() * robot_pose.M * fs_to_ee_rotation.Inverse() * force_scaled ;
 		//
 	}
 	else//If the force is disabled
@@ -1305,7 +1349,7 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 		// Setting the initial value for the averaging of the pos and orientation as that of the slave taken in
 		// master's ref frame since the master may move a bit when the clutch is not engaged, it is safer to start
 		// the averaging with the pos and ori of the slave itself.
-		KDL::Rotation temp_slv_rot =  mstr_to_slv_frame.M.Inverse() * slv_frame_curr.M * master_to_tool_orient_frame.M.Inverse();
+		KDL::Rotation temp_slv_rot =  mstr_to_slv_rotation_backup.Inverse() * slv_frame_curr.M * mstr_to_tool_orient_rotation.Inverse();
 		temp_slv_rot.GetRPY(this->mstr_rpy_avg[0],this->mstr_rpy_avg[1],this->mstr_rpy_avg[2]);
 
 		// delta position averaging can start from zero
@@ -1350,15 +1394,20 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 	}
 	//	if(int(this->pos_avg_n_variable) % 20 ==0)	cout << "pos_avg_n_variable " << pos_avg_n_variable << endl;
 
+//	KDL::Rotation board_to_slv = KDL::Rotation::Quaternion(0.0006631559834447937,
+//			0.01025268565089808, -0.004775177921367337, 0.9999358335412319);
+//	KDL::Rotation board_to_cam = KDL::Rotation::Quaternion(0.687347512818, -0.723422247661, 0.034459127575, 0.0550110601559);
+
 
 	//------------------------  REFERENCE FRAME TRANSFORMATIONS
 	//DELTA POSITION Reference frame transformation from master to slave
-	mstr_avg_frame.p = mstr_to_slv_frame.M * mstr_avg_frame.p ;
+//	mstr_avg_frame.p = board_to_slv * board_to_cam.Inverse() * mstr_to_cam_rotation * mstr_avg_frame.p ;
+	mstr_avg_frame.p = mstr_to_slv_rotation * mstr_avg_frame.p ;
 
 	// ORIENTATION Reference frame transformation from master to slave and the desired tool orientation
 	// with respect to the haptic device handle
 	// the master_to_tool_orient_frame rotates the tool of the robot, for example to have it horizontal
-	mstr_avg_frame.M = mstr_to_slv_frame.M * mstr_avg_frame.M * master_to_tool_orient_frame.M;
+	mstr_avg_frame.M = mstr_to_slv_rotation_backup * mstr_avg_frame.M * mstr_to_tool_orient_rotation;
 
 	//------------------------ Position is incremental
 	if(teleop_pos_coupled) slv_frame_dest.p = slv_frame_init.p + mstr_avg_frame.p;

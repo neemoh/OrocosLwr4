@@ -2,21 +2,51 @@
 <!DOCTYPE properties SYSTEM "cpf.dtd">
 <!-- Properties of the Position-Generator component -->
 <properties>
-	<simple name="time_period" type="double"><description>frame rate</description><value>0.005</value></simple>
-	<simple name="motion_mode" type="long"><description>Motion mode</description><value>4</value></simple>
-	<simple name="force_feedback_on" type="long"><description>Force feedback</description><value>0</value></simple>
-	<simple name="force_filter_on" type="long"><description>Force filter</description><value>0</value></simple>
-	<simple name="teleop_pos_coupled" type="long"><description>master slave position coupling</description><value>1</value></simple>
-	<simple name="teleop_ori_coupled" type="long"><description>master slave orientation coupling</description><value>1</value></simple>
-
-	<simple name="force_scale" type="double"><description>Force Scale</description><value>0.5</value></simple>
-	<simple name="translation_scale" type="double"><description>translation Scale</description><value>0.7</value></simple>
-	<simple name="tool_zlength" type="double"><description>distance of the tool tip in z direction from the flange</description><value>0.0956</value></simple>	
-	<simple name="tool_zlength" type="double"><description>distance of the tool tip in z direction from the flange</description><value>0.1252</value></simple>	
-<!--	<simple name="tool_zlength" type="double"><description>distance of the tool tip in z direction from the flange</description><value>0.2106</value></simple>
-	<simple name="tool_zlength" type="double"><description>distance of the tool tip in z direction from the flange</description><value>0.202932</value></simple>-->
-	<simple name="master_orientation_average_steps" type="double"><description>N average points</description><value>75</value></simple>
-	<simple name="master_position_average_steps" type="double"><description>N average points</description><value>10</value></simple>
+	<simple name="time_period" type="double">
+		<description>frame rate</description>
+		<value>0.005</value>
+	</simple>
+	<simple name="motion_mode" type="long">
+		<description>Motion mode</description>
+		<value>4</value>
+	</simple>
+	<simple name="force_feedback_on" type="long">
+		<description>Force feedback</description>
+		<value>0</value>
+	</simple>
+	<simple name="force_filter_on" type="long">
+		<description>Force filter</description>
+		<value>0</value>
+	</simple>
+	<simple name="teleop_pos_coupled" type="long">
+		<description>master slave position coupling</description>
+		<value>1</value>
+	</simple>
+	<simple name="teleop_ori_coupled" type="long">
+		<description>master slave orientation coupling</description>
+		<value>1</value>
+	</simple>
+	<simple name="force_scale" type="double">
+		<description>Force Scale</description>
+		<value>0.5</value>
+	</simple>
+	<simple name="translation_scale" type="double">
+		<description>translation Scale</description>
+		<value>0.7</value>
+	</simple>
+	<simple name="tool_zlength" type="double">
+		<description>distance of the tool tip in z direction from the flange</description>
+		<value>0.21375</value>
+	</simple>
+<!--	<simple name="tool_zlength" type="double"><description>distance of the tool tip in z direction from the flange</description><value>0.202932</value></simple>-->
+	<simple name="master_orientation_average_steps" type="double">
+		<description>N average points</description>
+		<value>50</value>
+	</simple>
+	<simple name="master_position_average_steps" type="double">
+		<description>N average points</description>
+		<value>10</value>
+	</simple>
 
 	<struct name="tr_master_to_base" type="array">
 		<description>Rigid transformation (quaternion) from master to robot's base. (Attention to x,y,z,w order)</description>

@@ -77,9 +77,9 @@ public:
 			double _pos_avg_n,
 			double _force_scale,
 			bool _force_feedback_on,
-			KDL::Frame _mstr_to_slv_frame,
-			KDL::Frame _fs_to_ee_frame,
-			KDL::Frame _master_to_tool_orient_frame);
+			KDL::Rotation _mstr_to_slv_frame,
+			KDL::Rotation _fs_to_ee_frame,
+			KDL::Rotation _master_to_tool_orient_frame);
 
 	//--------------------------------------------------------------------------------------------------
 	// calculate Force Bias
@@ -126,6 +126,13 @@ public:
 	void switchOrientationCoupling(const bool input);
 
 	//--------------------------------------------------------------------------------------------------
+	// Coupling switches
+	//--------------------------------------------------------------------------------------------------
+	// turn the position or orientation coupling on and off.
+	void setCam2SlaveRotation(KDL::Rotation cam_to_slave_rotation)
+	{mstr_to_slv_rotation = cam_to_slave_rotation * mstr_to_cam_rotation;};
+
+	//--------------------------------------------------------------------------------------------------
 	// changing the averaging window for orientation
 	//--------------------------------------------------------------------------------------------------
 	void setOrientationAvgWindow(unsigned int in){	rpy_avg_n = in;};
@@ -139,9 +146,11 @@ public:
 	KDL::Vector force_bias;
 
 	// transformations
-	KDL::Frame mstr_to_slv_frame;
-	KDL::Frame fs_to_ee_frame;
-	KDL::Frame master_to_tool_orient_frame;
+	KDL::Rotation mstr_to_slv_rotation;
+	KDL::Rotation mstr_to_slv_rotation_backup;
+	KDL::Rotation fs_to_ee_rotation;
+	KDL::Rotation mstr_to_tool_orient_rotation;
+	KDL::Rotation mstr_to_cam_rotation;
 
 	// teleop
 	bool clutch_first_time;
@@ -153,6 +162,8 @@ public:
 
 private:
 	double dt_param;
+
+	KDL::Rotation cam_to_slv_rotation;
 
 	// engagement counter
 	unsigned int first_engagement_counter_rpy, first_engagement_counter_pos;
@@ -270,9 +281,9 @@ public:
 	void switchPositionCoupling(const bool in){to->switchPositionCoupling(in);};
 
 	//-------------------------------------------------------------------------------------
-	// CDhanginf the length of the averaging
+	// Changing the length of the averaging
 	//-------------------------------------------------------------------------------------
-	void setOrientationAvgWindow(unsigned int in){	to->setOrientationAvgWindow(in); cout<<"OK!"<<endl;};
+	void setOrientationAvgWindow(const unsigned int in){	to->setOrientationAvgWindow(in); cout<<"OK!"<<endl;};
 
 	bool clipToLimits(std::vector<double>& vars, std::vector<double> min_limits, std::vector<double> max_limits) ;
 
@@ -300,6 +311,14 @@ public:
 	void jointStateMotionObserver(std::vector<double> q_curr, std::vector<double> q_dest, std::vector<double>& q_cmd );
 
 
+	//-------------------------------------------------------------------------------------
+	// Read and set camera to slave
+	//-------------------------------------------------------------------------------------
+	// Reads the camera to slave transformation from the corresponding port and
+	// sets the value for the teleop object..
+	void updateCam2SlavePose();
+
+
 	bool goHome();
 	void wtf();
 	void switchForceFeedback(const bool);
@@ -307,6 +326,7 @@ public:
 	void forceSensorCalib(){to->resetForceBias();};
 	bool startMotion();
 	bool stopMotion();
+
 private:
 
 	// frequency observer object pointer
@@ -349,8 +369,14 @@ private:
 	std::vector<double> tmp_cart_vec, tmp_joint_vec;
 
 
-	// reference frames
-	KDL::Frame fs_to_ee_frame, mstr_to_slv_frame, master_to_tool_orient_frame;
+	// force sensor to end-effector rotation
+	KDL::Rotation fs_to_ee_rotation;
+
+	// If the port of cam to slave is not connected this value is used
+	KDL::Rotation mstr_to_slv_backup_rotation;
+
+	// rotating the tool orientation to a desired one
+	KDL::Rotation master_to_tool_orient_rotation;
 
 
 	bool  force_filter_on;
@@ -399,6 +425,7 @@ protected:
 	RTT::InputPort<std_msgs::Int8> 							master_clutch_port;
 	RTT::InputPort<sensor_msgs::JointState> 				joint_msrd_port;		// DataPort containing the stamped pose
 	RTT::InputPort<geometry_msgs::Wrench>					force_from_slave_port;
+	RTT::InputPort<geometry_msgs::Pose> 					cam_to_slave_pose_port;
 	RTT::OutputPort<motion_control_msgs::JointPositions>	joint_command_port;		// DataPort containing the stamped pose
 	RTT::OutputPort<geometry_msgs::Twist> 					port_cart_twist;
 	RTT::OutputPort<geometry_msgs::Pose> 					cart_command_port;
