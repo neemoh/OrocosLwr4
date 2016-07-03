@@ -155,9 +155,9 @@ bool Teleop::configureHook(){
 	this->slv_jnt.v_last			=
 	this->tmp_joint_vec 			= std::vector<double>(this->num_joints, 0.0);
 
-	this->tmp_cart_vec 				=
-	this->slv_cart_6d_last   	   		=
-	this->slv_cart_v_6d_last 			= std::vector<double>(6, 0.0);
+	this->tmp_cart_vec 				= std::vector<double>(7, 0.0);
+	this->slv_cart_6d_last   	   	=
+	this->slv_cart_v_6d_last 		= std::vector<double>(6, 0.0);
 
 	this->slv_cart.v_curr 			= std::vector<double>(this->num_cart_p_var, 0.0);
 
@@ -1107,7 +1107,6 @@ bool ptpInterpolator::interpolate(const std::vector<double> p_dest, const std::v
 
 		double t_max_vel_tmp = 0.0;
 		double t_max_acc_tmp = 0.0;
-		cout << " hi 1" << endl;
 
 		for (unsigned int iter=0; iter < num_elements; iter++){
 
@@ -1123,7 +1122,6 @@ bool ptpInterpolator::interpolate(const std::vector<double> p_dest, const std::v
 				t_max_vel_tmp = 15*h.at(iter) / (8*v_max.at(iter));
 				t_max_acc_tmp = 10*std::sqrt(3)*h.at(iter) / (3*a_max.at(iter));
 			}
-			cout << " hi 3" << endl;
 
 			t_max_vel.at(iter) =std::fabs(t_max_vel_tmp);
 			t_max_acc.at(iter) = std::sqrt(std::fabs(t_max_acc_tmp));
@@ -1245,9 +1243,9 @@ teleopC::teleopC(double _period,
 	// mstr_to_camthis is the transformation from the Sigma device to the camera image plane.
 	// the image +x direction is from left to right of the screen, and +y is from
 	// top to bottom.
-	mstr_to_cam_rotation = KDL::Rotation::Quaternion(0.5, 0.5, -0.5, 0.5);
+	mstr_to_cam_rotation = KDL::Rotation::Quaternion(-0.5, -0.5, 0.5, 0.5);
 
-	first_engagement_counter_rpy =0;
+	first_engagement_counter_rpy = 0;
 	first_engagement_counter_pos = 0;
 
 	clutch_first_time = true;
@@ -1326,7 +1324,6 @@ geometry_msgs::Wrench teleopC::getForceFeedback(KDL::Frame robot_pose, geometry_
 }
 
 
-
 //--------------------------------------------------------------------------------------------------
 // calculateDesiredSlavePose
 //--------------------------------------------------------------------------------------------------
@@ -1349,7 +1346,8 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 		// Setting the initial value for the averaging of the pos and orientation as that of the slave taken in
 		// master's ref frame since the master may move a bit when the clutch is not engaged, it is safer to start
 		// the averaging with the pos and ori of the slave itself.
-		KDL::Rotation temp_slv_rot =  mstr_to_slv_rotation_backup.Inverse() * slv_frame_curr.M * mstr_to_tool_orient_rotation.Inverse();
+		KDL::Rotation temp_slv_rot = mstr_to_cam_rotation * cam_to_slv_rotation *slv_frame_curr.M * cam_to_slv_rotation.Inverse() * cam_to_slv_rotation.Inverse() *  mstr_to_cam_rotation.Inverse();
+
 		temp_slv_rot.GetRPY(this->mstr_rpy_avg[0],this->mstr_rpy_avg[1],this->mstr_rpy_avg[2]);
 
 		// delta position averaging can start from zero
@@ -1398,16 +1396,31 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 //			0.01025268565089808, -0.004775177921367337, 0.9999358335412319);
 //	KDL::Rotation board_to_cam = KDL::Rotation::Quaternion(0.687347512818, -0.723422247661, 0.034459127575, 0.0550110601559);
 
+//	double r,p,y;
+//	mstr_avg_frame.M.GetRPY(r,p,y);
+////	cout << "master Orientation        : "<< r*180/M_PI <<"  "<< p*180/M_PI << "  " << y*180/M_PI << endl;
+//	KDL:: Rotation temp = cam_to_slv_rotation.Inverse()*  mstr_to_cam_rotation.Inverse() *( mstr_avg_frame.M) * mstr_to_cam_rotation * cam_to_slv_rotation;
+
+//	cout << cam_to_slv_rotation.UnitX()[0]<<" " <<  cam_to_slv_rotation.UnitY()[0]<<" " <<  cam_to_slv_rotation.UnitZ()[0]<< " " << endl;;
+//	cout << cam_to_slv_rotation.UnitX()[1]<<" " <<  cam_to_slv_rotation.UnitY()[1]<<" " <<  cam_to_slv_rotation.UnitZ()[1]<<" " << endl;
+//	cout << cam_to_slv_rotation.UnitX()[2]<<" " <<  cam_to_slv_rotation.UnitY()[2]<<" " <<  cam_to_slv_rotation.UnitZ()[2]<<" " << endl;
+
+//	temp.GetRPY(r,p,y);
+//	cout << "des Orientation           : "<< r*180/M_PI <<"  "<< p*180/M_PI << "  " << y*180/M_PI << endl;
+
 
 	//------------------------  REFERENCE FRAME TRANSFORMATIONS
 	//DELTA POSITION Reference frame transformation from master to slave
-//	mstr_avg_frame.p = board_to_slv * board_to_cam.Inverse() * mstr_to_cam_rotation * mstr_avg_frame.p ;
 	mstr_avg_frame.p = mstr_to_slv_rotation * mstr_avg_frame.p ;
 
-	// ORIENTATION Reference frame transformation from master to slave and the desired tool orientation
-	// with respect to the haptic device handle
-	// the master_to_tool_orient_frame rotates the tool of the robot, for example to have it horizontal
-	mstr_avg_frame.M = mstr_to_slv_rotation_backup * mstr_avg_frame.M * mstr_to_tool_orient_rotation;
+	// ORIENTATION
+	// So here things get a bit nasty. First we take the orientation of the slave to camera and then to robot:
+	//
+	// 		(T'cs * (T'mc * slave_orient * Tmc) * Tcs)
+	//
+	// I want the tool of the robot to be directed out of the screen ( +z direction in the camera frame) that's why
+	// I have multiplied the above equation by Tcs at the end.
+	mstr_avg_frame.M = cam_to_slv_rotation.Inverse()*  mstr_to_cam_rotation.Inverse() *( mstr_avg_frame.M) * mstr_to_cam_rotation * cam_to_slv_rotation * cam_to_slv_rotation;
 
 	//------------------------ Position is incremental
 	if(teleop_pos_coupled) slv_frame_dest.p = slv_frame_init.p + mstr_avg_frame.p;

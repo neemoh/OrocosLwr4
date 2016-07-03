@@ -129,8 +129,9 @@ public:
 	// Coupling switches
 	//--------------------------------------------------------------------------------------------------
 	// turn the position or orientation coupling on and off.
-	void setCam2SlaveRotation(KDL::Rotation cam_to_slave_rotation)
-	{mstr_to_slv_rotation = cam_to_slave_rotation * mstr_to_cam_rotation;};
+	void setCam2SlaveRotation(KDL::Rotation in)
+	{	cam_to_slv_rotation = in;
+		mstr_to_slv_rotation = cam_to_slv_rotation * mstr_to_cam_rotation.Inverse();};
 
 	//--------------------------------------------------------------------------------------------------
 	// changing the averaging window for orientation
