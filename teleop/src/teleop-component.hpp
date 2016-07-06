@@ -77,9 +77,10 @@ public:
 			double _pos_avg_n,
 			double _force_scale,
 			bool _force_feedback_on,
-			KDL::Rotation _mstr_to_slv_frame,
-			KDL::Rotation _fs_to_ee_frame,
-			KDL::Rotation _master_to_tool_orient_frame);
+			std::vector<double> _mstr_to_slv_backup_rotation,
+			std::vector<double> _fs_to_ee_frame,
+			std::vector<double> _master_to_tool_orient_prop,
+			std::vector<double> _mstr_to_cam_rotation_prop);
 
 	//--------------------------------------------------------------------------------------------------
 	// calculate Force Bias
@@ -126,12 +127,18 @@ public:
 	void switchOrientationCoupling(const bool input);
 
 	//--------------------------------------------------------------------------------------------------
-	// Coupling switches
+	// setCam2SlaveRotation
 	//--------------------------------------------------------------------------------------------------
-	// turn the position or orientation coupling on and off.
-	void setCam2SlaveRotation(KDL::Rotation in)
-	{	cam_to_slv_rotation = in;
-		mstr_to_slv_rotation = cam_to_slv_rotation * mstr_to_cam_rotation.Inverse();};
+	// set the rotation from camera to slave.
+	void setCam2SlaveRotation(KDL::Rotation in);
+
+
+
+	//--------------------------------------------------------------------------------------------------
+	// setCam2SlaveRotation
+	//--------------------------------------------------------------------------------------------------
+	// set the rotation from camera to slave.
+	void mstrToSlave(const KDL::Frame & _in_mstr, KDL::Frame & _in_slave );
 
 	//--------------------------------------------------------------------------------------------------
 	// changing the averaging window for orientation
@@ -152,11 +159,13 @@ public:
 	KDL::Rotation fs_to_ee_rotation;
 	KDL::Rotation mstr_to_tool_orient_rotation;
 	KDL::Rotation mstr_to_cam_rotation;
+	KDL::Rotation slv_initial_orientation;
 
 	// teleop
-	bool clutch_first_time;
-	bool  teleop_pos_coupled,teleop_ori_coupled;
-	double transl_scale;
+	bool 	clutch_first_time;
+	bool 	teleop_pos_coupled,teleop_ori_coupled;
+	bool 	available_cam_pose;
+	double 	transl_scale;
 
 	KDL::Frame mstr_frame_curr, mstr_frame_init;
 	KDL::Frame slv_frame_init, slv_frame_dest;
@@ -370,14 +379,14 @@ private:
 	std::vector<double> tmp_cart_vec, tmp_joint_vec;
 
 
-	// force sensor to end-effector rotation
-	KDL::Rotation fs_to_ee_rotation;
-
-	// If the port of cam to slave is not connected this value is used
-	KDL::Rotation mstr_to_slv_backup_rotation;
-
-	// rotating the tool orientation to a desired one
-	KDL::Rotation master_to_tool_orient_rotation;
+//	// force sensor to end-effector rotation
+//	KDL::Rotation fs_to_ee_rotation;
+//
+//	// If the port of cam to slave is not connected this value is used
+//	KDL::Rotation mstr_to_slv_backup_rotation;
+//
+//	// rotating the tool orientation to a desired one
+//	KDL::Rotation master_to_tool_orient_rotation;
 
 
 	bool  force_filter_on;
@@ -418,7 +427,7 @@ protected:
 	std::vector<double> slv_jnt_q_max_prop,slv_jnt_q_min_prop;
 	std::vector<double> slv_jnt_v_max_prop, slv_jnt_a_max_prop;					// Vector with the maximum acceleration of each variable
 	std::vector<double> slv_jnt_home_prop;
-	std::vector<double> master_to_base_frame_prop, fs_to_ee_frame_prop, master_to_tool_orient_frame_prop;
+	std::vector<double> mstr_to_slv_rotation_prop, mstr_to_cam_rotation_prop, fs_to_ee_rotation_prop, mstr_to_tool_orient_prop;
 	std::vector<double> palpation_init_3dpose_prop,palpation_home_3dpose_prop;
 
 
@@ -430,6 +439,7 @@ protected:
 	RTT::OutputPort<motion_control_msgs::JointPositions>	joint_command_port;		// DataPort containing the stamped pose
 	RTT::OutputPort<geometry_msgs::Twist> 					port_cart_twist;
 	RTT::OutputPort<geometry_msgs::Pose> 					cart_command_port;
+	RTT::OutputPort<geometry_msgs::Quaternion> 				master_to_slave_rot_port;
 	RTT::OutputPort<geometry_msgs::Pose> 					cart_FK_port;
 	RTT::OutputPort<geometry_msgs::Wrench>					force_to_master_port;
 //	RTT::InputPort<tFriKrlData> 							port_from_krl_master;
