@@ -62,7 +62,6 @@ void AcGeomGen::updateHook(){
 			this->ac_received = true;
 	}
 	//	poseMsgToPositionKDLVec(this->tool_current_pose_msg,this->tool_current_pos);
-
 	if (this->ac_received){
 		switch(this->ac_geometry){
 		case 1:
