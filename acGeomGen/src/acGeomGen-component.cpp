@@ -1,15 +1,20 @@
 #include "acGeomGen-component.hpp"
 #include <rtt/Component.hpp>
 #include <iostream>
+#include <sensor_msgs/PointCloud2.h>
+
+using namespace std;
 
 AcGeomGen::AcGeomGen(std::string const& name) : TaskContext(name){
 
-	this->addPort("tool_pose_current", this->port_tool_pose_current).doc("Reading the current pose of the tool");
+	this->addEventPort("tool_pose_current", this->port_tool_pose_current).doc("Reading the current pose of the tool");
 	this->addPort("tool_pose_desired", this->port_tool_pose_desired).doc("Writing the desired pose of the tool");
+	this->addPort("ac_point_cloud", this->port_ac_point_cloud).doc("Writing the desired pose of the tool");
 
 	this->addProperty("square_ac_info",	square_ac_info_prop).doc("Properties of the square constraint.");
 	this->addProperty("circle_ac_info",	circle_ac_info_prop).doc("Properties of the circle constraint.");
 
+	this->ac_received = false;
 
 	ac_geometry = 1;
 	std::cout << "AcGeomGen constructed !" <<std::endl;
@@ -46,25 +51,43 @@ void AcGeomGen::updateHook(){
 
 	// Reading data. Not checking for RTT::NewData
 	this->port_tool_pose_current.read(this->tool_current_pose_msg);
-//	poseMsgToPositionKDLVec(this->tool_current_pose_msg,this->tool_current_pos);
 
-	switch(this->ac_geometry){
-	case 1:
-		this->ac_sq->getClosestPoint( this->tool_current_pose_msg.position.x, this->tool_current_pose_msg.position.y,
-				this->tool_desired_pose_msg);
-		break;
-	case 2:
-		this->ac_ci->getClosestPoint( this->tool_current_pose_msg.position.x, this->tool_current_pose_msg.position.y,
-				this->tool_desired_pose_msg);
-		break;
-	default:
-		// do nothing
-		break;
+	//
+	if(this->port_ac_point_cloud.read(this->ac_point_cloud) == RTT::NewData){
+		std::cout << "New ac point cloud received" << std::endl;
+		this->pointCloudToVector(this->ac_point_cloud, this->ac_points);
+
+		// flag
+		if(this->ac_points.size()>0)
+			this->ac_received = true;
 	}
+	//	poseMsgToPositionKDLVec(this->tool_current_pose_msg,this->tool_current_pos);
 
-	// publishing the desired tool pose on the port
-	if(this->ac_geometry==1 || this->ac_geometry ==2)
-		this->port_tool_pose_desired.write(this->tool_desired_pose_msg);
+	if (this->ac_received){
+		switch(this->ac_geometry){
+		case 1:
+			this->closestPointToACPoints(this->tool_current_pose_msg.position.x,
+					this->tool_current_pose_msg.position.y,
+					this->tool_current_pose_msg.position.z,
+					this->tool_desired_pose_msg);
+			break;
+		case 2:
+			this->ac_sq->getClosestPoint( this->tool_current_pose_msg.position.x, this->tool_current_pose_msg.position.y,
+					this->tool_desired_pose_msg);
+			break;
+		case 3:
+			this->ac_ci->getClosestPoint( this->tool_current_pose_msg.position.x, this->tool_current_pose_msg.position.y,
+					this->tool_desired_pose_msg);
+			break;
+		default:
+			// do nothing
+			break;
+		}
+
+		// publishing the desired tool pose on the port
+		if(this->ac_geometry==1 || this->ac_geometry ==2)
+			this->port_tool_pose_desired.write(this->tool_desired_pose_msg);
+	}
 }
 
 
@@ -173,6 +196,8 @@ acCircle::acCircle(std::vector<double> in){
 	radious = in[3];
 
 }
+
+
 void acCircle::getClosestPoint(double tool_x, double tool_y, geometry_msgs::Pose & cp_pose_msg) {
 
 	// take the tool point to the local frame
@@ -189,6 +214,63 @@ void acCircle::getClosestPoint(double tool_x, double tool_y, geometry_msgs::Pose
 	cp_pose_msg.position.y += center[1];
 	// z is constant
 	cp_pose_msg.position.z = center[2];
+
+}
+
+
+void AcGeomGen::pointCloudToVector(const sensor_msgs::PointCloud2 & input, std::vector< std::vector<double> > &vecetor_out){
+
+	size_t size = input.width * input.height;
+	int x_idx = getPointCloud2FieldIndex (input, "x");
+	int y_idx = getPointCloud2FieldIndex (input, "y");
+	int z_idx = getPointCloud2FieldIndex (input, "z");
+
+	int x_offset = input.fields[x_idx].offset;
+	int y_offset = input.fields[y_idx].offset;
+	int z_offset = input.fields[z_idx].offset;
+
+	std::vector<double> point = std::vector<double>(3, 0.0);
+	for (size_t cp = 0; cp < size; ++cp)
+	{
+		// Copy x/y/z
+		float x,y,z;
+	    memcpy (&x, &input.data[cp * input.point_step + x_offset], sizeof (float));
+	    memcpy (&y, &input.data[cp * input.point_step + y_offset], sizeof (float));
+	    memcpy (&z, &input.data[cp * input.point_step + z_offset], sizeof (float));
+
+		point[0] = double(x);
+		point[1] = double(y);
+		point[2] = double(z);
+
+		vecetor_out.push_back(point);
+	}
+
+//	for (size_t cp = 0; cp < size; ++cp){
+//		std::cout<< "x: " << vecetor_out[cp][0] << " y: " << vecetor_out[cp][1] << " z: "<<  vecetor_out[cp][2] << std::endl;
+//	}
+}
+
+
+void AcGeomGen::closestPointToACPoints(double _tool_x, double _tool_y, double _tool_z, geometry_msgs::Pose & cp_pose_msg){
+
+	double min_d = 100000; // something large
+	size_t i_min = 0;
+	//	cout << ac_points.size() << endl;
+
+	for(size_t i=0; i<ac_points.size(); i++){
+		double dx = _tool_x - ac_points[i][0];
+		double dy = _tool_y - ac_points[i][1];
+		double dz = _tool_z - ac_points[i][2];
+		double norm2 = dx*dx + dy*dy + dz*dz;
+		if(norm2 < min_d){
+			min_d = norm2;
+			i_min = i;
+		}
+
+	}
+	cp_pose_msg.position.x = ac_points[i_min][0];
+	cp_pose_msg.position.y = ac_points[i_min][1];
+	cp_pose_msg.position.z = ac_points[i_min][2];
 
 }
 /*

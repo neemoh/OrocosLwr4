@@ -17,8 +17,8 @@ sigma7::sigma7(std::string const& name) :
 	this->addPort("forceToMaster", this->force_to_master_port).doc("Readings of the pose from Sigma");
 
 	this->addOperation("usePedal", &sigma7::usePedal, this);
-	this->addProperty("tr_master_to_base", 	master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
-	this->addProperty("tr_master_to_tool_orient", 	this->master_to_tool_orient_frame_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
+	this->addProperty("rot_master_to_slave", 	master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
+	this->addProperty("rot_master_to_tool_orient", 	this->master_to_tool_orient_frame_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 
 	//Initialize variables
 	this->use_pedal = 0;
@@ -40,8 +40,11 @@ bool sigma7::configureHook() {
 	if (!this->initSigma())
 		return false;
 	// properties
-	this->mstr_to_slv_frame.M	= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
-	this->master_to_tool_orient_frame.M				= KDL::Rotation::Quaternion(this->master_to_tool_orient_frame_prop[0], this->master_to_tool_orient_frame_prop[1], this->master_to_tool_orient_frame_prop[2], this->master_to_tool_orient_frame_prop[3]);
+	if(master_to_base_frame_prop.size()>0)
+		this->mstr_to_slv_frame.M	= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
+
+	if(master_to_tool_orient_frame_prop.size()>0)
+		this->master_to_tool_orient_frame.M	= KDL::Rotation::Quaternion(this->master_to_tool_orient_frame_prop[0], this->master_to_tool_orient_frame_prop[1], this->master_to_tool_orient_frame_prop[2], this->master_to_tool_orient_frame_prop[3]);
 
 
 	log(RTT::Info) << "sigma7 configured !" << Logger::endl;
