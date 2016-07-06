@@ -168,6 +168,17 @@ bool conversions::vectorToKDLFrame(vector<double> vector_in, KDL::Frame &kdlFram
 
 }
 
+geometry_msgs::Quaternion conversions::KDLRotToQuaternionMsg(const KDL::Rotation & in){
+	geometry_msgs::Quaternion out;
+	in.GetQuaternion(out.x, out.y, out.z, out.w);
+	return out;
+}
+
+KDL::Rotation  			conversions::quaternionMsgToKDLRot(const geometry_msgs::Quaternion & in){
+	KDL::Rotation out;
+	out = KDL::Rotation::Quaternion(in.x, in.y,  in.z, in.w);
+}
+
 
 geometry_msgs::Wrench conversions::createWrenchMsg(double fx, double fy, double fz, double tx, double ty, double tz){
 

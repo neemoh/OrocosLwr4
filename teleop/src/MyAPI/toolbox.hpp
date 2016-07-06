@@ -31,6 +31,9 @@ namespace conversions  {
 	bool KDLFrameToVector(KDL::Frame kdlFrame, vector<double> & vector) ;
 	bool vectorToKDLFrame(vector<double> matrixvector, KDL::Frame &matrix);
 
+	geometry_msgs::Quaternion 	KDLRotToQuaternionMsg(const KDL::Rotation & in);
+	KDL::Rotation  				quaternionMsgToKDLRot(const geometry_msgs::Quaternion & in);
+
 	geometry_msgs::Wrench createWrenchMsg(double fx, double fy, double fz, double tx, double ty, double tz);
 
 	vector<double>  radTodeg(const vector<double> in);
