@@ -27,11 +27,17 @@ public:
 	// functions for orocos deployer operations
 	void setACMode(int m);
 	void setFMAX(double in);
-
+	//--------------------------------------------------------------------------------------------------
+	// setCam2SlaveRotation
+	//--------------------------------------------------------------------------------------------------
+	// set the rotation from camera to slave.
+	void initializeMasterToSlaveTransformation();
+	void updateMasterToSlaveTransformation();
 	// a pointer of the base class type for each method
 	ac * ac_p_ptr;
 	ac * ac_pr_ptr;
 	ac * ac_vr_ptr;
+	ac * ac_e_ptr;
 
 private:
 	// some used variables
@@ -44,17 +50,27 @@ private:
 	KDL::Vector ac_force;
 	KDL::Vector ac_force_master_ref;
 	KDL::Vector current_vel;
-	KDL::Frame mstr_to_slv_frame;
+
+	KDL::Rotation mstr_to_slv_rotation;
+	KDL::Rotation mstr_to_cam_rotation;
+	KDL::Rotation cam_to_slv_rotation;
+	KDL::Rotation mstr_to_slv_rotation_backup;
 protected:
 	// properties
-	std::vector<double> master_to_base_frame_prop;
+	// this frame is used if no camera rotation is provided
+	std::vector<double> mstr_to_slv_rotation_prop;
+	std::vector<double> mstr_to_cam_rotation_prop;
+	double period_prop;
 
 	// defining the ports
-	RTT::InputPort<geometry_msgs::Pose> port_read_tool_pose;
-	RTT::InputPort<geometry_msgs::Twist> port_read_twist;
-	RTT::InputPort<geometry_msgs::Pose> port_read_desired_pose;
-	RTT::InputPort<std_msgs::Int8> port_read_hapdev_switch;
-	RTT::OutputPort<geometry_msgs::Wrench> port_write_force;
+	RTT::InputPort<geometry_msgs::Pose> 		port_read_tool_pose;
+	RTT::InputPort<geometry_msgs::Twist> 		port_read_twist;
+	RTT::InputPort<geometry_msgs::Pose> 		port_read_desired_pose;
+	RTT::InputPort<std_msgs::Int8> 				port_read_hapdev_switch;
+	RTT::InputPort<geometry_msgs::Quaternion> 	mstr_to_slv_tr_port;
+
+
+	RTT::OutputPort<geometry_msgs::Wrench> 		port_write_force;
 
 };
 
@@ -64,7 +80,7 @@ protected:
 // a conversion function
 void poseMsgToPositionKDLVec( geometry_msgs::Pose pose_in, KDL::Vector &vec_out);
 // a simple test elastic method
-void ac_elastic_force_generation(KDL::Vector &f_out, const KDL::Vector penet);
+void ac_elastic_force_generation(KDL::Vector &f_out, const KDL::Vector & penet, const KDL::Vector & vel);
 
 
 

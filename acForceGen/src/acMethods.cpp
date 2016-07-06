@@ -251,6 +251,47 @@ void acViscousRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, 
 
 
 
+//-----------------------------------------------------------------------
+// SIMPLE ELASTIC WITH DAMPING
+//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
+// Constructor
+//-----------------------------------------------------------------------
+acElastic::acElastic(double _F_MAX, double _k, double _b, double _dt){
+	F_MAX = _F_MAX;
+	k = _k;
+	b = _b;
+	dt = _dt;
+	penet_last = KDL::Vector(0.0, 0.0, 0.0);
+	penet_vel = 0;
+};
+
+
+//-----------------------------------------------------------------------
+// FORCE GENERATION
+//-----------------------------------------------------------------------
+
+void acElastic::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd){
+
+	// find the penetration vector
+	KDL::Vector penet = p_desired - p_tool;
+
+	// make the force vector
+	KDL::Vector f_all = k * penet - b * v_msrd;
+	double f_all_magnitude = toolbox::vec_norm(f_all);
+
+	// limit the force to F_MAX
+	if (f_all_magnitude > F_MAX)
+		f_out = F_MAX/f_all_magnitude * f_all;
+	else
+		f_out = f_all;
+
+	// save last penet
+	penet_last = penet;
+
+}
+
+
 
 
 

@@ -174,6 +174,33 @@ private:
 
 
 //-----------------------------------------------------------------------
+// VISCOUSE WITH REDIRECTION - INTRODUCED BY ENAYATI ET AL. 2016
+//-----------------------------------------------------------------------
+class acElastic: public ac{
+public:
+
+	//! the constructor
+	acElastic(double F_MAX, double _k, double _b, double _dt);
+
+	//! This method calculates the force
+	void getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd);
+	void setKB(double _k, double _b){
+		k = _k;
+		b = _b;
+	}
+
+private:
+	//! elasticity and viscosity coefficients
+	double k;
+	double b;
+
+	double dt;
+	//! internal variable the method needs to keep a track of
+	KDL::Vector penet_last;
+	double penet_vel;
+
+};
+//-----------------------------------------------------------------------
 //-----------------------------------------------------------------------
 
 

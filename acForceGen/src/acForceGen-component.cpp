@@ -49,27 +49,30 @@
 //-----------------------------------------------------------------------
 AcForceGen::AcForceGen(std::string const& name) : TaskContext(name)	{
 
+	// not initializing the acs here because the properties cann be used from the configureHook onwards
+
 	// add ports
 	this->addPort("tool_pose", this->port_read_tool_pose).doc("Reading the current pose of the tool");
 	this->addPort("tool_twist", this->port_read_twist).doc("Readings linear and angluar velocities of the tool");
-	this->addPort("desired_pose", this->port_read_desired_pose).doc("Readings the desired pose of the tool");
+	this->addEventPort("desired_pose", this->port_read_desired_pose).doc("Readings the desired pose of the tool");
 	this->addPort("hapdev_switch", this->port_read_hapdev_switch).doc("Reading the state of the haptic device switch");
 	this->addPort("ac_force", this->port_write_force).doc("Writing the generated active constraint");
+	this->addPort("inputMasterToSlaveTr", this->mstr_to_slv_tr_port).doc("input camera to slave pose");
+
 	// read properties
-	this->addProperty("tr_master_to_base", 	master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
+	this->addProperty("rot_master_to_slave", 	this->mstr_to_slv_rotation_prop).doc("Rigid transformation from master to robot base. Used when master to Cam rotation is not available");
+	this->addProperty("rot_master_to_cam", 		this->mstr_to_cam_rotation_prop).doc("Rigid transformation from master to camera (display).");
+	this->addProperty("time_period", 			this->period_prop).doc("The constant time period used for interpolation");
 
 	// add operations
-	this->addOperation("setACMode", &AcForceGen::setACMode, this).doc("set the active constraint method: 0: No ac, 1: Plastic, 2:Plastic with redirection, 3: vicouse with redirection, -1 elastic test");
-	this->addOperation("setFMAX", &AcForceGen::setFMAX, this).doc("set the active constraint method");
+	this->addOperation("setACMode", 				&AcForceGen::setACMode, this).doc("set the active constraint method: 0: No ac, 1: Plastic, 2:Plastic with redirection, 3: vicouse with redirection, -1 elastic test");
+	this->addOperation("setFMAX", 					&AcForceGen::setFMAX, this).doc("set the active constraint method");
 
 	// initialization
 	this->ac_mode = 0;
 	this->FMAX = 5;
 	this->penet	  = KDL::Vector(0.0, 0.0, 0.0);
 
-	this->ac_p_ptr = new acPlast(this->FMAX, 0.003, 0.0);
-	this->ac_pr_ptr = new acPlastRedirect(this->FMAX, 0.003, 0.002);
-	this->ac_vr_ptr = new acViscousRedirect(this->FMAX, 60, 0.004) ;
 
 	std::cout << "AcForceGen constructed !" <<std::endl;
 }
@@ -78,15 +81,29 @@ AcForceGen::AcForceGen(std::string const& name) : TaskContext(name)	{
 // Configure hook
 //-----------------------------------------------------------------------
 bool AcForceGen::configureHook(){
-	std::cout << "AcForceGen is !" <<std::endl;
+	RTT::Logger::In in(this->getName());
 
 	// initializing the output port
 	this->port_write_force.setDataSample(this->wrench_out);
 
 	// properties
-	this->mstr_to_slv_frame.M	= KDL::Rotation::Quaternion(this->master_to_base_frame_prop[0], this->master_to_base_frame_prop[1], this->master_to_base_frame_prop[2], this->master_to_base_frame_prop[3]);
+	this->mstr_to_slv_rotation_backup	= KDL::Rotation::Quaternion(this->mstr_to_slv_rotation_prop[0], this->mstr_to_slv_rotation_prop[1], this->mstr_to_slv_rotation_prop[2], this->mstr_to_slv_rotation_prop[3]);
+	this->mstr_to_cam_rotation			= KDL::Rotation::Quaternion(this->mstr_to_cam_rotation_prop[0], this->mstr_to_cam_rotation_prop[1], this->mstr_to_cam_rotation_prop[2], this->mstr_to_cam_rotation_prop[3]);
 
-	std::cout << "AcForceGen configured !" <<std::endl;
+
+	// Viscous with redirection (f_max, elastic_lenth, boundary_thresh)
+	this->ac_p_ptr = new acPlast(this->FMAX, 0.003, 0.0);
+
+	// plastic with redirection (f_max, elastic_lenth, boundary_thresh)
+	this->ac_pr_ptr = new acPlastRedirect(this->FMAX, 0.003, 0.002);
+
+	// Viscous with redirection (f_max, b_max, boundary_thresh)
+	this->ac_vr_ptr = new acViscousRedirect(this->FMAX, 60, 0.004) ;
+
+	//elastic constraint (f_max, k, b, dt)
+	this->ac_e_ptr  = new acElastic(this->FMAX/2, 200, 20, this->period_prop);
+
+	log(RTT::Info) << "AcForceGen configured!" << RTT::endlog();
 	return true;
 }
 
@@ -97,7 +114,10 @@ bool AcForceGen::startHook(){
 
 	if(this->isRunning())
 		return false;
-	std::cout << "AcForceGen started !" <<std::endl;
+
+	this->initializeMasterToSlaveTransformation();
+
+	log(RTT::Info) << "AcForceGen started!" << RTT::endlog();
 	return true;
 }
 
@@ -119,6 +139,9 @@ void AcForceGen::updateHook(){
 	this->current_vel[0] = this->current_twist.linear.x;
 	this->current_vel[1] = this->current_twist.linear.y;
 	this->current_vel[2] = this->current_twist.linear.z;
+
+	// updating the transformation based on the camera (if topic available and new message published)
+	this->updateMasterToSlaveTransformation();
 
 	// Dealing only with the positions, the deference between the current and desired positions
 	// is called penetration vector.
@@ -144,7 +167,7 @@ void AcForceGen::updateHook(){
 		this->ac_vr_ptr->getForce(this->ac_force, this->current_pos, this->desired_pos,this->current_vel);
 		break;
 	case -1:
-		ac_elastic_force_generation(this->ac_force, penet);
+		this->ac_e_ptr->getForce(this->ac_force, this->current_pos, this->desired_pos,this->current_vel);
 		break;
 
 	default:
@@ -154,7 +177,7 @@ void AcForceGen::updateHook(){
 	}
 
 	// writing the wrench on the port
-	this->ac_force_master_ref = this->mstr_to_slv_frame.M.Inverse() * this->ac_force;
+	this->ac_force_master_ref = this->mstr_to_slv_rotation.Inverse() * this->ac_force;
 
 	this->wrench_out.force.x = this->ac_force_master_ref[0];
 	this->wrench_out.force.y = this->ac_force_master_ref[1];
@@ -167,7 +190,7 @@ void AcForceGen::updateHook(){
 // startHook
 //-----------------------------------------------------------------------
 void AcForceGen::stopHook() {
-  std::cout << "AcForceGen executes stopping !" <<std::endl;
+	log(RTT::Info) << "AcForceGen executes stopping!" << RTT::endlog();
 }
 
 //-----------------------------------------------------------------------
@@ -179,7 +202,8 @@ void AcForceGen::cleanupHook() {
 	delete this->ac_p_ptr;
 	delete this->ac_pr_ptr;
 	delete this->ac_vr_ptr;
-  std::cout << "AcForceGen cleaning up !" <<std::endl;
+	log(RTT::Info) << "AcForceGen cleaning up!" << RTT::endlog();
+
 }
 
 
@@ -193,15 +217,17 @@ void AcForceGen::cleanupHook() {
 //-----------------------------------------------------------------------
 // A simple elastic ac for test
 //-----------------------------------------------------------------------
-void ac_elastic_force_generation(KDL::Vector &f_out, const KDL::Vector penet){
+void ac_elastic_force_generation(KDL::Vector &f_out, const KDL::Vector & penet, const KDL::Vector & vel){
 	double f_, dx, dy, dz, dis;
+	double v_norm = vel.Norm();
 
 	dx = penet[0];
 	dy = penet[1];
 	dz = penet[2];
 	dis = sqrt(dx*dx + dy*dy + dz*dz);
-	f_ = 200 * dis;
+	f_ = 200 * dis - 50 * v_norm;
 	if (f_ >2) f_ = 2;
+
 
 	f_out[0]  = f_ * dx/dis;
 	f_out[1]  = f_ * dy/dis;
@@ -242,6 +268,47 @@ void AcForceGen::setFMAX(double in){
 		ac_pr_ptr->setFmax(this->FMAX);
 		ac_vr_ptr->setFmax(this->FMAX);
 	}
+}
+
+
+void AcForceGen::initializeMasterToSlaveTransformation(){
+
+	RTT::Logger::In in(this->getName());
+
+	geometry_msgs::Quaternion pose_in;
+
+	// reading the cam to slave data if available
+	if (this->mstr_to_slv_tr_port.connected() && this->mstr_to_slv_tr_port.read(pose_in) != RTT::NoData ){
+
+		mstr_to_slv_rotation = KDL::Rotation::Quaternion(pose_in.x, pose_in.y, pose_in.z, pose_in.w);
+		// notify the user
+		log(RTT::Info)<< " Updated the camera to slave transformation." << RTT::endlog();
+
+	}
+	else{
+		log(RTT::Warning)<< "Port " << this->mstr_to_slv_tr_port.getName() << " is not connected. Using backup cam to master rotation" << RTT::endlog();
+		mstr_to_slv_rotation = mstr_to_slv_rotation_backup;
+	}
+
+}
+
+
+void AcForceGen::updateMasterToSlaveTransformation(){
+
+	RTT::Logger::In in(this->getName());
+
+	geometry_msgs::Quaternion pose_in;
+
+	// reading the cam to slave data if available
+	if (this->mstr_to_slv_tr_port.connected() && this->mstr_to_slv_tr_port.read(pose_in) == RTT::NewData ){
+
+		mstr_to_slv_rotation = KDL::Rotation::Quaternion(pose_in.x, pose_in.y, pose_in.z, pose_in.w);
+		// notify the user
+		log(RTT::Info)<< " Updated the master to slave transformation." << RTT::endlog();
+
+	}
+
+
 }
 /*
  * Using this macro, only one component may live
