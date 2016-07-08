@@ -26,8 +26,8 @@ struct stateVar{
 	std::vector<double> q_min, q_max, v_max, a_max;
 };
 
-
-
+// Forward Declaration
+class Teleop;
 
 //-------------------------------------------------------------------------------------
 // CLASS: freqObserver
@@ -61,6 +61,56 @@ public:
 
 
 //-------------------------------------------------------------------------------------
+// CLASS: PTPINTERPOLATOR
+//-------------------------------------------------------------------------------------
+// A 5th order polynomial (or 3rd order) interpolator.
+// All variables arrive at the same time
+class ptpInterpolator {
+
+public:
+	ptpInterpolator(
+			const std::vector<double> _v_max,
+			const std::vector<double> _a_max,
+			const double _dt_param);
+
+	bool setDestination(
+			const std::vector<double> _p_dest,
+			const std::vector<double> _p_curr);
+
+
+	bool getNextCommand(
+			std::vector<double> & p_interpd,
+			bool & dest_reached);
+
+private:
+	// max velocity and acceleration
+	std::vector<double> v_max;
+	std::vector<double> a_max;
+
+	// initial point
+	std::vector<double> p_init;
+	std::vector<double> p_dest;
+
+	// interpolation variables
+	std::vector<double> h;
+	std::vector<double> a1;
+	std::vector<double> a2;
+	std::vector<double> a3;
+
+
+	unsigned int num_elements;
+	unsigned int degree;
+	double T;
+	double dt_param;
+	unsigned int counter;
+	bool dest_set;
+	bool dest_reached;
+
+};
+
+
+
+//-------------------------------------------------------------------------------------
 // CLASS: tele-operation
 //-------------------------------------------------------------------------------------
 class teleopC{
@@ -81,6 +131,9 @@ public:
 			std::vector<double> _fs_to_ee_frame,
 			std::vector<double> _master_to_tool_orient_prop,
 			std::vector<double> _mstr_to_cam_rotation_prop);
+
+
+	void initializeOrientation(Teleop * tel, ptpInterpolator * cart_interpolator);
 
 	//--------------------------------------------------------------------------------------------------
 	// calculate Force Bias
@@ -165,6 +218,8 @@ public:
 	bool 	clutch_first_time;
 	bool 	teleop_pos_coupled,teleop_ori_coupled;
 	bool 	available_cam_pose;
+	bool 	tool_reorientation_done;
+	bool 	reorientation_first_run;
 	double 	transl_scale;
 
 	KDL::Frame mstr_frame_curr, mstr_frame_init;
@@ -191,50 +246,6 @@ private:
 
 };
 
-
-//-------------------------------------------------------------------------------------
-// CLASS: PTPINTERPOLATOR
-//-------------------------------------------------------------------------------------
-// A 5th order polynomial (or 3rd order) interpolator.
-// All variables arrive at the same time
-class ptpInterpolator {
-
-public:
-	ptpInterpolator(
-			const std::vector<double> _v_max,
-			const std::vector<double> _a_max,
-			const double _dt_param);
-
-
-	bool interpolate(const std::vector<double> p_dest,
-			const std::vector<double> p_curr,
-			std::vector<double>& p_interpd,
-			bool& dest_reached);
-
-private:
-	// max velocity and acceleration
-	std::vector<double> v_max;
-	std::vector<double> a_max;
-
-	// initial point
-	std::vector<double> p_init;
-
-	// interpolation variables
-	std::vector<double> h;
-	std::vector<double> a1;
-	std::vector<double> a2;
-	std::vector<double> a3;
-
-
-	unsigned int num_elements;
-	unsigned int degree;
-	double T;
-	double dt_param;
-	unsigned int counter;
-	bool new_dest;
-	bool dest_reached;
-
-};
 //-------------------------------------------------------------------------------------
 // CLASS: Teleop OROCOS COMPONENT
 //-------------------------------------------------------------------------------------
@@ -281,6 +292,11 @@ public:
 	// For setting a joint destination. The trajectory is polynomial velocity.
 	// example: setPTPJointDestination (array(0.1, 0.7, 0.5, -1.0, 0.5, 1.0, 0.9))
 	bool setPTPJointDestination(const std::vector<double> values);
+
+	//-------------------------------------------------------------------------------------
+	// helper function for conversion and setting up of the cartesian interpolator
+	//-------------------------------------------------------------------------------------
+	void initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::Frame &  slv_frame_curr, ptpInterpolator * _cart_interpolator);
 
 	//-------------------------------------------------------------------------------------
 	// Orientation and position coupling
@@ -337,19 +353,22 @@ public:
 	bool startMotion();
 	bool stopMotion();
 
-private:
+
 
 	// frequency observer object pointer
 	freqObserver * fo;
 	teleopC * to;
-	ptpInterpolator * interpolator1;
+	ptpInterpolator * joint_interpolator;
+	ptpInterpolator * cart_interpolator;
+
+
 
 	// flags
 	bool motionOn;
 	bool destination_reached;
 	bool teleop_interpolate_done;
 	bool new_cart_dest;
-
+	bool tool_reorientation_done;
 	// some integers!
 	unsigned int motion_mode;
 	unsigned int num_cart_p_var, num_cart_vars;
@@ -368,7 +387,7 @@ private:
 	KDL::Frame slv_frame_curr, slv_frame_init, slv_frame_dest, slv_frame_cmd, slv_frame_cmd_last;
 
 	// slave 6d vectors [x, y, z, r, p, y]
-	std::vector<double> slv_cart_6d_last, slv_cart_v_6d_last;
+//	std::vector<double> slv_cart_6d_dest, slv_cart_6d_curr;
 
 	// slave home joint configuration. [j1, j2, j3, j4, j5, j6, j7]
 	std::vector<double> slv_jnt_home;
@@ -387,7 +406,7 @@ private:
 //
 //	// rotating the tool orientation to a desired one
 //	KDL::Rotation master_to_tool_orient_rotation;
-
+private:
 
 	bool  force_filter_on;
 	double transl_scale;

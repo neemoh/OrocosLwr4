@@ -86,6 +86,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->destination_reached 		= true;
 	this->teleop_interpolate_done	= false;
 	this->motionOn 					= true;
+	this->tool_reorientation_done	= false;
 
 	this->new_cart_dest 			= false;
 	this->force_filter_on			= false;
@@ -158,8 +159,6 @@ bool Teleop::configureHook(){
 	this->tmp_joint_vec 			= std::vector<double>(this->num_joints, 0.0);
 
 	this->tmp_cart_vec 				= std::vector<double>(7, 0.0);
-	this->slv_cart_6d_last   	   	=
-	this->slv_cart_v_6d_last 		= std::vector<double>(6, 0.0);
 
 	this->slv_cart.v_curr 			= std::vector<double>(this->num_cart_p_var, 0.0);
 
@@ -191,9 +190,14 @@ bool Teleop::configureHook(){
 			1/this->period_prop,
 			10);
 
-	this->interpolator1 = new ptpInterpolator(
+	this->joint_interpolator = new ptpInterpolator(
 			this->slv_jnt.v_max,
 			this->slv_jnt.a_max,
+			this->period_prop);
+
+	this->cart_interpolator = new ptpInterpolator(
+			this->slv_cart.v_max,
+			this->slv_cart.a_max,
 			this->period_prop);
 
 	// construct the velocity filter object
@@ -240,6 +244,8 @@ bool Teleop::startHook(){
 
 
 void Teleop::updateHook(){
+
+	RTT::Logger::In in(this->getName());
 
 	//--------------------------------------------------------------------------------------------------
 	// 							  		 Reading Data and Forward kinematics
@@ -305,21 +311,22 @@ void Teleop::updateHook(){
 			if (this->new_cart_dest ){
 
 				//Inverse Kinematics
-				if (this->kine->ik(this->slv_frame_dest, this->robot_config,  this->psi_curr[0], this->tmp_joint_vec)) {
+				if (this->kine->ik(this->slv_frame_dest, this->robot_config,  this->psi_curr[0], this->tmp_joint_vec))
 					this->setPTPJointDestination(this->tmp_joint_vec);
-				}
-				else {
+				else
 					log(RTT::Warning) << "No good pose of the robot; no solution of the inverse kinematics: due to bad target or bad configuration or bad nullspace parameter" << endlog();
-					this->tmp_joint_vec = std::vector<double>(this->num_joints, 0.0); 		//Reset temporary variables
-				}
 
 				this->new_cart_dest = false;
 			}
 
 			//Joint Interpolation
+			// the destination of the joint_interpolator is set in the setPTPJointDestination method.
 			if (!this->destination_reached){
-				if(!this->interpolator1->interpolate(this->slv_jnt.q_dest, this->slv_jnt.q_curr, this->slv_jnt.q_cmd,	 this->destination_reached)){
-					log(RTT::Error)<<  "Error P2P interpolator. Stopping the interpolator" <<endlog();
+
+				if(!this->joint_interpolator->getNextCommand(this->slv_jnt.q_cmd, this->destination_reached)){
+					log(RTT::Error)<<  "Error joint_interpolator." <<endlog();
+					// to prevent looping over the error
+					this->destination_reached = true;
 				}
 			}
 
@@ -334,48 +341,30 @@ void Teleop::updateHook(){
 			// Trapezoidal velocity profile.
 			if (!this->destination_reached){
 
-				///////////////////////////////////////////
-				std::vector<double> cart_6d_dest  = std::vector<double>(6,0.0);
-				std::vector<double> cart_6d_cmd   = std::vector<double>(6,0.0);
-				std::vector<double>	v_cart_6d_now = std::vector<double>(6,0.0);
-
 				if(this->new_cart_dest){
-					this->slv_cart_6d_last[0] = this->slv_frame_curr.p[0];
-					this->slv_cart_6d_last[1] = this->slv_frame_curr.p[1];
-					this->slv_cart_6d_last[2] = this->slv_frame_curr.p[2];
-					slv_frame_curr.M.GetRPY(slv_cart_6d_last[3], slv_cart_6d_last[4], slv_cart_6d_last[5]);
+
+					this->initializeCart6dTraj(this->slv_frame_dest, this->slv_frame_curr, this->cart_interpolator);
+
+					// save the current arm angle to be used in the redundany handler
 					this->psi_last[0] = this->psi_curr[0];
+
+					// remove the flag
 					this->new_cart_dest = false;
 				}
 
-				//Saving the position values in a variable for the interpolator
-				cart_6d_dest[0] = this->slv_frame_dest.p[0];
-				cart_6d_dest[1] = this->slv_frame_dest.p[1];
-				cart_6d_dest[2] = this->slv_frame_dest.p[2];
-				// orientation
-				slv_frame_dest.M.GetRPY(cart_6d_dest[3], cart_6d_dest[4], cart_6d_dest[5]);
+				// be used in the interpolation
+				std::vector<double> cart_6d_cmd   = std::vector<double>(6,0.0);
 
-				variableInterpolator(cart_6d_dest, this->slv_cart_6d_last, this->slv_cart_v_6d_last, cart_6d_cmd,
-						v_cart_6d_now,  this->slv_cart.q_min, this->slv_cart.q_max, this->slv_cart.v_max, this->slv_cart.a_max, this->destination_reached, this->fo->dt_param) ;
+				// interpolate the 6 Cartesian variables based on the current values and the destination
+				if(!this->cart_interpolator->getNextCommand( cart_6d_cmd,	 this->destination_reached)){
 
-//				cout << "cart_6d_dest " << cart_6d_dest<< endl;
-//				cout << "cart_6d_cmd " << cart_6d_dest<< endl;
+					log(RTT::Error)<<  "Error P2P interpolator. Stopping the interpolator" <<endlog();
+					// to prevent looping over the error
+					this->destination_reached = true;
+				}
+				// convert back to frame and set as Cartesian command
+				conversions::vector6ToKDLFrame( cart_6d_cmd ,this->slv_frame_cmd);
 
-				this->slv_frame_cmd.M = KDL::Rotation::RPY(cart_6d_cmd[3],cart_6d_cmd[4],cart_6d_cmd[5]);
-				this->slv_frame_cmd.p.data[0] = cart_6d_cmd[0];
-				this->slv_frame_cmd.p.data[1] = cart_6d_cmd[1];
-				this->slv_frame_cmd.p.data[2] = cart_6d_cmd[2];
-
-				this->slv_cart_6d_last = cart_6d_cmd;
-				this->slv_cart_v_6d_last = v_cart_6d_now;
-
-				this->new_cart_dest = false;
-
-			}
-			else{
-				this->slv_cart_6d_last[0] = this->slv_frame_curr.p[0];
-				this->slv_cart_6d_last[1] = this->slv_frame_curr.p[1];
-				this->slv_cart_6d_last[2] = this->slv_frame_curr.p[2];
 			}
 			break;
 
@@ -429,20 +418,30 @@ void Teleop::updateHook(){
 				this->to->calculateForceBias(this->tmp_wrench);
 			}
 
+
 			//--------------------------------------------------------------------------------------------------
 			// 			WHEN CLUTCH ENGAGED
 			//--------------------------------------------------------------------------------------------------
 			if (this->master_clutch.data == 1 ){
 
+
+				//--------------------------------------------------------------------------------------------------
+				// reorienting the tool to arrive at the desired
+				//--------------------------------------------------------------------------------------------------
+
+//				if(!this->to->tool_reorientation_done)
+//					this->to->initializeOrientation(this , this->cart_interpolator);
+
 				//			if (force_bias_computed){
 				if (this->master_msrd_pose_port.read(this->tmp_pose_msg) != RTT::NoData){
 
 					// pose validity check
-					if(this->manipA< 0.01){
-						std::cout << "ATTENTION! the robot is ill-posed. Please stop tele-operation and move the robot to a better configuration." << std::endl;
+					if(this->manipA< 0.005){
+						log(Warning) << "ATTENTION! the robot is ill-posed. Please stop tele-operation and move the robot to a better configuration." << endlog();
 						this->changeMotionMode(1);
-						std::cout << "Motion mode is changed to 1. Please use setPTPJointDestination() and move to a better position." << std::endl;
+						log(Warning) << "Motion mode is changed to 1. Please use setPTPJointDestination() and move to a better position." << endlog();
 					}
+
 					//--------------------------------------------------------------------------------------------------
 					// Slave Pose
 					//--------------------------------------------------------------------------------------------------
@@ -454,6 +453,7 @@ void Teleop::updateHook(){
 
 					// find slave's Cartesian destination
 					this->slv_frame_dest = this->to->calculateDesiredSlavePose(this->slv_frame_curr,this->tmp_pose_msg);
+
 
 					// not supervising in Cartesian
 					this->slv_frame_cmd = this->slv_frame_dest;
@@ -475,8 +475,11 @@ void Teleop::updateHook(){
 					// Force: write on the port
 					this->force_to_master_port.write(this->mstr_wrench_cmd);
 				}
-				else
+				else{
 					log(Error) << " No new readings from: " << this->master_msrd_pose_port.getName()  << endlog();
+					break;
+				}
+
 			}
 			else { //If the clutch is released
 				this->to->clutch_first_time = true;
@@ -545,7 +548,7 @@ void Teleop::updateHook(){
 		// saw no improvement so I switched back to first order.
 		// Note that I am calculating the velocity based on the commanded position not current one
 		for (unsigned int iter=0; iter < this->num_cart_p_var; iter++){
-			this->slv_cart.v_curr.at(iter) = (this->slv_frame_cmd.p[iter] - this->slv_frame_cmd_last.p[iter]) / this->fo->dt_param;
+			this->slv_cart.v_curr[iter] = (this->slv_frame_cmd.p[iter] - this->slv_frame_cmd_last.p[iter]) / this->fo->dt_param;
 		}
 
 		//		// FOAW
@@ -846,7 +849,7 @@ bool Teleop::setPTPCartDestination(const std::vector<double>& vars) {
 		}
 
 		//Set the flags
-		if(this->motion_mode!=1) this->destination_reached = false; // WHen motion mode ==1 the flag will be set later in setPTPJointDestination
+		if(this->motion_mode!=1) this->destination_reached = false; // When motion mode ==1 the flag will be set later in setPTPJointDestination
 		this->new_cart_dest = true;
 		return true;
 	}
@@ -882,6 +885,7 @@ bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 			//Set the destination and the flags
 			this->slv_jnt.q_dest = vars;
 			this->destination_reached= false;
+			this->joint_interpolator->setDestination(this->slv_jnt.q_dest, this->slv_jnt.q_curr);
 			return true;
 		}
 		else
@@ -895,6 +899,33 @@ bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 		return false;
 	}
 }
+
+
+
+void Teleop::initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::Frame &  slv_frame_curr, ptpInterpolator * _cart_interpolator){
+
+	std::vector<double> slv_cart_6d_dest = std::vector<double>(6,0.0);
+	std::vector<double> slv_cart_6d_curr = std::vector<double>(6,0.0);
+
+	// convert the destination pose to (x,y,z,r,p,y)
+	conversions::KDLFrameToVector6(slv_frame_dest, slv_cart_6d_dest);
+
+	// convert the current pose to (x,y,z,r,p,y) and save it as the last value
+	conversions::KDLFrameToVector6(slv_frame_curr, slv_cart_6d_curr);
+
+	// set the interpolator's detination
+	_cart_interpolator->setDestination(slv_cart_6d_dest, slv_cart_6d_curr);
+
+	vector<double> diff;
+	for (size_t i= 0; i < slv_cart_6d_dest.size(); i++){
+		diff.push_back(slv_cart_6d_dest[i] - slv_cart_6d_curr[i]);
+	}
+	cout << "Initialized the Cartesian trajectory with displacements: " << diff << endl;
+	cout << " slv_cart_6d_curr " << slv_cart_6d_curr << endl;
+	cout << " slv_cart_6d_dest " << slv_cart_6d_dest << endl;
+}
+
+
 ///------------------------------------------------------------------------------------------------------------------------------------
 void Teleop::switchForceFeedback(bool input){
 	Logger::In in(this->getName());
@@ -939,7 +970,7 @@ void Teleop::wtf(){
 
 		//	Reading the Cartesian pose of the robot
 	if( this->slave_cart_port.read(this->tmp_pose_msg) != RTT::NoData) {
-		conversions::poseMsgToVector(this->tmp_pose_msg, this->tmp_cart_vec);
+		conversions::poseMsgToVector7(this->tmp_pose_msg, this->tmp_cart_vec);
 	}
 	cout << "Current Cartesian pose read from the FRI read now   : " << this->tmp_cart_vec << endl;
 	cout << "Current Cartesian position (FK from joints) 		 : " << this->slv_frame_curr.p << endl;
@@ -1054,7 +1085,7 @@ ptpInterpolator::ptpInterpolator(std::vector<double> _v_max, std::vector<double>
 	p_init 		= std::vector<double>(num_elements, 0.0);
 
 	dest_reached 	= false;
-	new_dest 		= true;
+	dest_set 		= false;
 	counter 		= 0;
 	std::cout << "Constructed a ptpInterpolator for " << num_elements << " elements. " << std::endl;
 
@@ -1064,7 +1095,7 @@ ptpInterpolator::ptpInterpolator(std::vector<double> _v_max, std::vector<double>
 //--------------------------------------------------------------------------------------------------
 //Teleop P2PInterpolator
 //--------------------------------------------------------------------------------------------------
-bool ptpInterpolator::interpolate(const std::vector<double> p_dest, const std::vector<double> p_curr, std::vector<double>& p_interpd,	bool& dest_reached){
+bool ptpInterpolator::setDestination(const std::vector<double> _p_dest, const std::vector<double> _p_curr){
 
 	//The approach is to calculate minimum time for each joint and then to synchronize all the joints
 	//at the largest value of the minimum times so that they reach the target at the same time.
@@ -1094,120 +1125,144 @@ bool ptpInterpolator::interpolate(const std::vector<double> p_dest, const std::v
 	//	a3=Vin-2;
 	//
 	// Nima 2014
+
+	// ATTENTION; I THINK THERE'S A MISTAKE SOMEWHERE HERE THAT MAY LEAD TO HIGHER VELOCITIES THATN THE LIMIT
+	// I'LL FIX IT IF I FIND THE TIME, IF YOU'RE SEEING THIS IT MEANS I HAVE NOT!! :)
+
 	if(degree!=3 && degree!=5){
-		std::cout << " Wrong interpolation degree." << std::endl;
+		log(RTT::Error) <<  " Wrong interpolation degree." << endlog();
 		return false;
 	}
 
-	if((p_dest.size()!= num_elements) || (p_interpd.size() != num_elements) ){
-		std::cout << " Wrong input sizes in the ptp interpolator." << std::endl;
+	if((_p_dest.size()!= num_elements) || (_p_curr.size() != num_elements) ){
+		log(RTT::Error) <<  " Wrong input sizes in the ptp interpolator." << endlog();
 		return false;
 	}
 
-	if(new_dest){
-		p_init = p_curr;
+	p_dest = _p_dest;
+
+	if(dest_set){
+		log(RTT::Warning) << "ptpInterpolator can't set a new destination while the previous has not been reached." << endlog();
+
+		return false;
+	}
+	else{
+
+		p_init = _p_curr;
+
 		std::vector<double> t_max_vel(num_elements, 0.0);
 		std::vector<double> t_max_acc(num_elements, 0.0);
 
-		double t_max_vel_tmp = 0.0;
-		double t_max_acc_tmp = 0.0;
-
 		for (unsigned int iter=0; iter < num_elements; iter++){
 
-			h.at(iter) = p_dest.at(iter) -p_init.at(iter);
+			h[iter] = p_dest[iter] -p_init[iter];
 
 			if(degree==3){
 				//	3rd degree polynomial
-				t_max_vel_tmp = 3*h.at(iter) / (2*v_max.at(iter));
-				t_max_acc_tmp = 6*h.at(iter) / a_max.at(iter);
+				t_max_vel[iter]  = std::fabs( 3*h[iter] / (2*v_max[iter]) );
+				t_max_acc[iter] 	= std::fabs( 6*h[iter] / a_max[iter] );
 			}
 			else if(degree == 5){
 				//	5th degree polynomial
-				t_max_vel_tmp = 15*h.at(iter) / (8*v_max.at(iter));
-				t_max_acc_tmp = 10*std::sqrt(3)*h.at(iter) / (3*a_max.at(iter));
+				t_max_vel[iter]  = std::fabs( 15*h[iter] / (8*v_max[iter]) );
+				t_max_acc[iter] 	= std::fabs( 10*std::sqrt(3)*h[iter] / (3*a_max[iter]) );
 			}
 
-			t_max_vel.at(iter) =std::fabs(t_max_vel_tmp);
-			t_max_acc.at(iter) = std::sqrt(std::fabs(t_max_acc_tmp));
 		}
-		// find the joint that will take the longest
-		t_max_vel_tmp = *( max_element(t_max_vel.begin() , t_max_vel.end()) );
-		t_max_acc_tmp = *( max_element(t_max_acc.begin() , t_max_acc.end()) );
-		T = (t_max_acc_tmp >= t_max_vel_tmp ? t_max_acc_tmp : t_max_vel_tmp);
 
-//		std::cout << " t_max_vel_tmp: " << t_max_vel_tmp << " t_max_acc_tmp: " << t_max_acc_tmp << " T: " << T << " v_max.at(0) " << v_max.at(0)<< " a_max.at(0) " << a_max.at(0) << std::endl;
+		// find the joint that will take the longest
+		double t_max_vel_all = *( max_element(t_max_vel.begin() , t_max_vel.end()) );
+		double t_max_acc_all = *( max_element(t_max_acc.begin() , t_max_acc.end()) );
+
+		T = (t_max_acc_all >= t_max_vel_all ? t_max_acc_all : t_max_vel_all);
+
+		//		std::cout << " t_max_vel_tmp: " << t_max_vel_tmp << " t_max_acc_tmp: " << t_max_acc_tmp << " T: " << T << " v_max.at(0) " << v_max.at(0)<< " a_max.at(0) " << a_max.at(0) << std::endl;
 
 		double h_tot = 0.0;
 		for (unsigned int iter=0; iter < num_elements; iter++){
 			// Find the total displacement of the variables
-			h_tot += fabs(h.at(iter));
+			h_tot += std::fabs(h[iter]);
 
 			// Check if the destination is changed for this joint. (Prevent division by zero due to h=0)
-			if (fabs(h.at(iter)) > INTERPOLATION_TOLERANCE ){
+			if (std::fabs(h[iter]) > INTERPOLATION_TOLERANCE ){
 				//If initial velocity is considered
-				//				this->a1.at(iter) =v_init.at(iter) * T/h.at(iter);
-				//				this->a2.at(iter) =3 - 2 * (v_init.at(iter) * T/h.at(iter));
-				//				this->a3.at(iter) =(v_init.at(iter) * T/h.at(iter)) - 2;
+				//				this->a1[iter] =v_init[iter] * T/h[iter];
+				//				this->a2[iter] =3 - 2 * (v_init[iter] * T/h[iter]);
+				//				this->a3[iter] =(v_init[iter] * T/h[iter]) - 2;
 
 				//Assuming Zero initial velocity
 				// a coefficients could be just doubles, but for the case with non-zero initial velocity a vector
 				// was needed.
 				if(degree==3){
 					//	3rd degree polynomial
-					this->a1.at(iter) = 0.0;
-					this->a2.at(iter) = 3.0;
-					this->a3.at(iter) = -2.0;
+					this->a1[iter] = 0.0;
+					this->a2[iter] = 3.0;
+					this->a3[iter] = -2.0;
 				}
 				else if(degree==5){
 					//	5th degree polynomial
-					this->a1.at(iter) = 10.0;
-					this->a2.at(iter) = -15.0;
-					this->a3.at(iter) = 6.0;
+					this->a1[iter] = 10.0;
+					this->a2[iter] = -15.0;
+					this->a3[iter] = 6.0;
 				}
 			}
 			else{
-				this->a1.at(iter) = 0.0;
-				this->a2.at(iter) = 0.0;
-				this->a3.at(iter) = 0.0;
+				this->a1[iter] = 0.0;
+				this->a2[iter] = 0.0;
+				this->a3[iter] = 0.0;
 			}
 		}
-		if(fabs(h_tot) < INTERPOLATION_TOLERANCE ){
+		if(std::fabs(h_tot) < INTERPOLATION_TOLERANCE ){
 			log(RTT::Warning) << "The commanded destination is the same as current." << endlog();
 			dest_reached= true;
-			new_dest = true;
-			return true;
+			dest_set = false;
+			return false;
 		}
 		counter = 1;
-		new_dest = false;
+		dest_set = true;
+		return true;
+	}
+}
+
+
+bool ptpInterpolator::getNextCommand(std::vector<double> & p_interpd, bool & dest_reached){
+
+	if( (p_interpd.size() != num_elements) ){
+		std::cout << " Wrong input sizes in the ptp interpolator." << std::endl;
+		return false;
 	}
 
-	//taw = (os::TimeService::Instance()->secondsSince(time_init)) / T;  //This turned to be a bad choice. Constant dt
-	double taw = counter * dt_param / T;
-	counter++;
+	if(dest_set){
+		//taw = (os::TimeService::Instance()->secondsSince(time_init)) / T;  //This turned to be a bad choice. Constant dt
+		double taw = counter * dt_param / T;
+		counter++;
 
-	if (taw<=1.0){
-		for (unsigned int iter=0; iter < num_elements; iter++){
+		if (taw<=1.0){
+			for (unsigned int iter=0; iter < num_elements; iter++){
 
-			// Check if the destination is changed for this joint.
-			if (fabs(h.at(iter)) > INTERPOLATION_TOLERANCE ){
-				if(degree==3)
-					p_interpd.at(iter) = p_init.at(iter) + h.at(iter) * ( this->a1.at(iter)*taw 	   + this->a2.at(iter)*pow(taw,2) + this->a3.at(iter)*pow(taw,3) );
-				else if (degree==5)
-					p_interpd.at(iter) = p_init.at(iter) + h.at(iter) * ( this->a1.at(iter)*pow(taw,3) + this->a2.at(iter)*pow(taw,4) + this->a3.at(iter)*pow(taw,5));
+				// Check if the destination is changed for this joint.
+				if (fabs(h[iter]) > INTERPOLATION_TOLERANCE ){
+					if(degree==3)
+						p_interpd[iter] = p_init[iter] + h[iter] * ( this->a1[iter]*taw 	   + this->a2[iter]*pow(taw,2) + this->a3[iter]*pow(taw,3) );
+					else if (degree==5)
+						p_interpd[iter] = p_init[iter] + h[iter] * ( this->a1[iter]*pow(taw,3) + this->a2[iter]*pow(taw,4) + this->a3[iter]*pow(taw,5));
+				}
+				else
+					p_interpd[iter] = p_init[iter];
 			}
-			else
-				p_interpd.at(iter) = p_init.at(iter);
 		}
+		else{
+			p_interpd = p_dest;
+			dest_reached= true;
+			dest_set = false;
+			log(RTT::Info) << "ptpInterpolator::getNextCommand Reached destination." << endlog();
+		}
+		return true;
 	}
 	else{
-		p_interpd = p_dest;
-		dest_reached= true;
-		new_dest = true;
-		log(RTT::Info) << "Teleop::P2PInterpolator: Reached destination:" << endlog();
+		log(RTT::Info) << "ptpInterpolator::getNextCommand No destination has been set." << endlog();
+		return false;
 	}
-
-	return true;
-
 }
 
 
@@ -1264,6 +1319,8 @@ teleopC::teleopC(double _period,
 
 	clutch_first_time = true;
 	available_cam_pose = false;
+	tool_reorientation_done = false;
+	reorientation_first_run	= true;
 
 	pos_avg_n_variable = 0;
 	rpy_avg_n_variable = 0;
@@ -1273,6 +1330,46 @@ teleopC::teleopC(double _period,
 	mstr_rpy_avg = std::vector<double>(3, 0.0);
 	mstr_deltapos_avg = std::vector<double>(3, 0.0);
 }
+
+
+
+void teleopC::initializeOrientation(Teleop * tel, ptpInterpolator * cart_interpolator){
+
+	if(reorientation_first_run){
+
+		KDL::Frame desired_frame;
+		desired_frame.M = slv_initial_orientation;
+		desired_frame.p = tel->slv_frame_curr.p;
+
+		tel->initializeCart6dTraj(desired_frame, tel->slv_frame_curr, cart_interpolator);
+
+		// save the current arm angle to be used in the redundany handler
+		tel->psi_last[0] = tel->psi_curr[0];
+
+		// remove the flag
+		reorientation_first_run = false;
+		log(Warning) << "ATTENTION! the robot is moving to the initial orientation. Hold the clutch and do not move the master until further notice!" << endlog();
+
+	}
+
+	// be used in the interpolation
+	std::vector<double> cart_6d_cmd   = std::vector<double>(6,0.0);
+
+	// interpolate the 6 Cartesian variables based on the current values and the destination
+	if(!cart_interpolator->getNextCommand( cart_6d_cmd,	 tool_reorientation_done)){
+
+		log(RTT::Error)<<  "Error P2P interpolator. Stopping the interpolator" <<endlog();
+		// to prevent looping over the error
+		tool_reorientation_done= true;
+	}
+	// convert back to frame and set as Cartesian command
+	conversions::vector6ToKDLFrame( cart_6d_cmd , tel->slv_frame_dest);
+
+	if(tool_reorientation_done)
+		log(Warning) << "Reorientation is finished. Now you can tele operate." << endlog();
+
+}
+
 
 //--------------------------------------------------------------------------------------------------
 // calculateDesiredSlavePose
