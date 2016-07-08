@@ -1,6 +1,6 @@
 #include "toolbox.hpp"
 
-void  conversions::poseMsgToVector(const geometry_msgs::Pose in_pose, vector<double>& out_vec) {
+void  conversions::poseMsgToVector7(const geometry_msgs::Pose in_pose, vector<double>& out_vec) {
 
 	out_vec.at(0) = in_pose.position.x;
 	out_vec.at(1) = in_pose.position.y;
@@ -26,7 +26,7 @@ void  conversions::poseStampedToPositionVector(const geometry_msgs::PoseStamped 
 
 }
 
-void  conversions::vectorToPoseMsg(const vector<double> in_vec, geometry_msgs::Pose& out_pose){
+void  conversions::vector7ToPoseMsg(const vector<double> in_vec, geometry_msgs::Pose& out_pose){
 
 	out_pose.position.x = in_vec.at(0);
 	out_pose.position.y = in_vec.at(1);
@@ -97,14 +97,6 @@ void  conversions::poseReset( geometry_msgs::Pose& pose){
 
 
 
-void  conversions::vec3Reset(geometry_msgs::Vector3& vec3){
-
-	vec3.x = 0.0;
-	vec3.y = 0.0;
-	vec3.z = 0.0;
-}
-
-
 void conversions::jointPosReset(motion_control_msgs::JointPositions& in_joint ){
 
 	unsigned int num_joints = in_joint.positions.size();
@@ -114,12 +106,6 @@ void conversions::jointPosReset(motion_control_msgs::JointPositions& in_joint ){
 }
 
 
-void  conversions::vectorToVector3(const vector<double> vec, geometry_msgs::Vector3& vec3){
-
-	vec3.x = vec.at(0);
-	vec3.y = vec.at(1);
-	vec3.z = vec.at(2);
-}
 
 void  conversions::vectorToTwist(const vector<double> vec, geometry_msgs::Twist& twist){
 
@@ -131,25 +117,33 @@ void  conversions::vectorToTwist(const vector<double> vec, geometry_msgs::Twist&
 
 
 
-bool conversions::KDLFrameToVector(KDL::Frame kdlFrame, vector<double> & vector_out) {
+bool conversions::KDLFrameToVector7(KDL::Frame kdlFrame, vector<double> & vector_out) {
 
-	vector_out = vector<double>(7, 0.0);
-	tf::Pose tmp_Pose;
-	tf::PoseKDLToTF(kdlFrame, tmp_Pose);
-	tf::Quaternion tmp_quaternion = tmp_Pose.getRotation();
-	tmp_quaternion.normalize();
-	vector_out.at(0) = tmp_Pose.getOrigin()[0];
-	vector_out.at(1) = tmp_Pose.getOrigin()[1];
-	vector_out.at(2) = tmp_Pose.getOrigin()[2];
-	vector_out.at(3) = tmp_quaternion[0];
-	vector_out.at(4) = tmp_quaternion[1];
-	vector_out.at(5) = tmp_quaternion[2];
-	vector_out.at(6) = tmp_quaternion[3];
-	return true;
+	if(vector_out.size() == 7) {
+		tf::Pose tmp_Pose;
+		tf::PoseKDLToTF(kdlFrame, tmp_Pose);
+		tf::Quaternion tmp_quaternion = tmp_Pose.getRotation();
+		tmp_quaternion.normalize();
+		vector_out.at(0) = tmp_Pose.getOrigin()[0];
+		vector_out.at(1) = tmp_Pose.getOrigin()[1];
+		vector_out.at(2) = tmp_Pose.getOrigin()[2];
+		vector_out.at(3) = tmp_quaternion[0];
+		vector_out.at(4) = tmp_quaternion[1];
+		vector_out.at(5) = tmp_quaternion[2];
+		vector_out.at(6) = tmp_quaternion[3];
+		return true;
+	}
+	else{
+		cout << "ERROR: In conversions::KDLFrameToVector7. Input vector must have 7 elements. Instead it has:" << vector_out.size() << endl;
+		return false;
+
+	}
 
 }
 
-bool conversions::vectorToKDLFrame(vector<double> vector_in, KDL::Frame &kdlFrame) {
+
+
+bool conversions::vector7ToKDLFrame(vector<double> vector_in, KDL::Frame &kdlFrame) {
 
 	if(vector_in.size() == 7) {
 		kdlFrame = KDL::Frame::Identity();
@@ -161,12 +155,54 @@ bool conversions::vectorToKDLFrame(vector<double> vector_in, KDL::Frame &kdlFram
 		return true;
 	}
 	else {
-		cout << "ERROR: In conversions::vectorToKDLFrame. Input vector must have 7 elements. Instead it has:" << vector_in.size() << endl;
+		cout << "ERROR: In conversions::vector7ToKDLFrame. Input vector must have 7 elements. Instead it has:" << vector_in.size() << endl;
 		return false;
 	}
 
 
 }
+
+
+bool conversions::KDLFrameToVector6(const KDL::Frame & frame_in, vector<double> & vector_out){
+
+	if(vector_out.size() == 6) {
+		//Saving the position values in a vector for the interpolator
+		vector_out[0] = frame_in.p[0];
+		vector_out[1] = frame_in.p[1];
+		vector_out[2] = frame_in.p[2];
+		// orientation
+		frame_in.M.GetRPY(vector_out[3], vector_out[4], vector_out[5]);
+		return true;
+	}
+	else{
+		cout << "ERROR: In conversions::KDLFrameToVector6. Input vector must have 6 elements. Instead it has:" << vector_out.size() << endl;
+		return false;
+	}
+}
+
+
+bool conversions::vector6ToKDLFrame(const vector<double> & vector_in, KDL::Frame & frame_out){
+
+	if(vector_in.size() == 6) {
+		//Saving the position values in a vector for the interpolator
+		 frame_out.p[0] = vector_in[0];
+		 frame_out.p[1] = vector_in[1];
+		 frame_out.p[2] = vector_in[2];
+
+		// orientation
+		frame_out.M = KDL::Rotation::RPY(vector_in[3],vector_in[4],vector_in[5]);
+		return true;
+
+	}
+	else{
+		cout << "ERROR: In conversions::KDLFrameToVector6. Input vector must have 6 elements. Instead it has:" << vector_in.size() << endl;
+		return false;
+	}
+}
+
+
+
+
 
 geometry_msgs::Quaternion conversions::KDLRotToQuaternionMsg(const KDL::Rotation & in){
 	geometry_msgs::Quaternion out;

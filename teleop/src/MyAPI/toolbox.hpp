@@ -13,7 +13,7 @@ using namespace std;
 
 namespace conversions  {
 
-	void poseMsgToVector(const geometry_msgs::Pose ,  vector<double>& );
+	void poseMsgToVector7(const geometry_msgs::Pose ,  vector<double>& );
 	void poseMsgToPositionVector(const geometry_msgs::Pose , vector<double>&);
 
 	void poseStampedToPositionVector(const geometry_msgs::PoseStamped , vector<double>&);
@@ -25,11 +25,17 @@ namespace conversions  {
 
 	bool vectorToJointPos (const vector<double> ,  motion_control_msgs::JointPositions& );
 	void JointPosVectorToJointState (const vector<double> ,   sensor_msgs::JointState& );
-	void vectorToVector3(const vector<double> , geometry_msgs::Vector3& );
-	void vectorToPoseMsg(const vector<double> , geometry_msgs::Pose&);
+
+	void vector7ToPoseMsg(const vector<double> , geometry_msgs::Pose&);
 	void vectorToTwist(const vector<double> vec, geometry_msgs::Twist& twist);
-	bool KDLFrameToVector(KDL::Frame kdlFrame, vector<double> & vector) ;
-	bool vectorToKDLFrame(vector<double> matrixvector, KDL::Frame &matrix);
+
+	// to/from KDL Frame to/from  7d vector (x, y, z, qx, qy, qz, qw)
+	bool KDLFrameToVector7(KDL::Frame kdlFrame, vector<double> & vector) ;
+	bool vector7ToKDLFrame(vector<double> matrixvector, KDL::Frame &matrix);
+
+	// convert KDL Frame to a 6d vector (x, y, z, roll, pitch, yaw)
+	bool KDLFrameToVector6(const KDL::Frame &, vector<double> &);
+	bool vector6ToKDLFrame(const vector<double> & vector_in, KDL::Frame & frame_out);
 
 	geometry_msgs::Quaternion 	KDLRotToQuaternionMsg(const KDL::Rotation & in);
 	KDL::Rotation  				quaternionMsgToKDLRot(const geometry_msgs::Quaternion & in);
@@ -39,7 +45,6 @@ namespace conversions  {
 	vector<double>  radTodeg(const vector<double> in);
 
 	void poseReset(geometry_msgs::Pose& );
-	void vec3Reset(geometry_msgs::Vector3& );
 	void jointPosReset(motion_control_msgs::JointPositions& );
 
 };
