@@ -9,9 +9,8 @@
 #include <iostream>
 template <typename T> int sgn(T val);
 
-//bool variableInterpolator(const std::vector<double> xTargetI, std::vector<double> xLastI, std::vector<double> vLastI, std::vector<double>& xNowI, std::vector<double>& vNowI, const std::vector<double> xMinI, const std::vector<
-//		double> xMaxI, const std::vector<double> vMaxI, const std::vector<double> vMaxLastI, const std::vector<double> aMaxI);
 
+// FROM ACTIVE PROJECT. I THINK IT'S WRITTEN BY MIRKO KUNZE
 
 bool variableInterpolator(const std::vector<double> xTargetI, std::vector<double> xLastI, std::vector<double> vLastI, std::vector<double>& xNowI, std::vector<double>& vNowI, const std::vector<double> xMinI, const std::vector<
 		double> xMaxI, const std::vector<double> vMaxI, const std::vector<double> aMaxI, bool& target_reached, const double dt) {

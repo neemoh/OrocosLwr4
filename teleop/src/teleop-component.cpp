@@ -84,7 +84,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->transl_scale				= 1.0;
 
 	this->destination_reached 		= true;
-	this->teleop_interpolate_done	= false;
+	this->teleop_interpolate_done	= true;
 	this->motionOn 					= true;
 	this->tool_reorientation_done	= false;
 
@@ -428,12 +428,11 @@ void Teleop::updateHook(){
 				//--------------------------------------------------------------------------------------------------
 				// reorienting the tool to arrive at the desired
 				//--------------------------------------------------------------------------------------------------
-
-//				if(!this->to->tool_reorientation_done)
-//					this->to->initializeOrientation(this , this->cart_interpolator);
+				if(!this->to->reorientation_done)
+					this->to->initializeOrientation(this , this->cart_interpolator);
 
 				//			if (force_bias_computed){
-				if (this->master_msrd_pose_port.read(this->tmp_pose_msg) != RTT::NoData){
+				else if (this->master_msrd_pose_port.read(this->tmp_pose_msg) != RTT::NoData){
 
 					// pose validity check
 					if(this->manipA< 0.005){
@@ -497,7 +496,7 @@ void Teleop::updateHook(){
 		//--------------------------------------------------------------------------------------------------
 		// Redundancy handling and inverse Kinematics for modes 2 and 4.
 		//--------------------------------------------------------------------------------------------------
-		if((this->motion_mode==2 || this->motion_mode==4) && (!this->destination_reached || this->master_clutch.data == 1) ){
+		if((this->motion_mode==2 || this->motion_mode==4) && (!this->destination_reached || this->master_clutch.data == 1) && this->to->reorientation_done){
 
 			//--------------------------------------------------------------------------------------------------
 			// Find the best arm angel
@@ -516,9 +515,9 @@ void Teleop::updateHook(){
 			// if in the tele-operation case the commanded joint is too far, something is wrong. To prevent
 			// the robot from locking, interpolate IN JOINTS towards the destination. This is mainly for
 			// debug. NOte that the Cartesian pose of the tool will vary from that of the master device
-			// during the interpolation.
+			// during the interpolation. If the displacement is too big, then it's safer for the robot to lock.
 			if(this->motion_mode==4)
-				this->jointStateMotionObserver(this->slv_jnt.q_curr, this->slv_jnt.q_dest, this->slv_jnt.q_cmd);
+				this->jointStateMotionObserver(this->slv_jnt.q_cmd_last, this->slv_jnt.q_dest, this->slv_jnt.q_cmd);
 			else // if motion_mode is 2
 				this->slv_jnt.q_cmd =this->slv_jnt.q_dest;
 		}
@@ -586,7 +585,8 @@ void Teleop::updateHook(){
 		// Measuring the computation time
 		this->fo->t_computation = os::TimeService::Instance()->secondsSince(this->fo->computation_time_from);
 
-	}
+	}//motionON
+
 }
 
 
@@ -614,8 +614,9 @@ void Teleop::jointStateMotionObserver(std::vector<double> q_curr, std::vector<do
 		}
 		double max_diff = *( max_element(temp_vec.begin() , temp_vec.end()) );
 
-		// if the largest asked displacement is bigger than 3 degrees something is wrtong, so interpolate.
-		if (max_diff> 3*M_PI/180){
+		// if the largest asked displacement is bigger than 3 degrees but not too big, interpolate.
+		if (max_diff> 3*M_PI/180 && max_diff< 10*M_PI/180){
+			cout << max_diff*180/M_PI << endl;
 			this->teleop_interpolate_done = false;
 		}
 	}
@@ -1319,7 +1320,7 @@ teleopC::teleopC(double _period,
 
 	clutch_first_time = true;
 	available_cam_pose = false;
-	tool_reorientation_done = false;
+	reorientation_done = false;
 	reorientation_first_run	= true;
 
 	pos_avg_n_variable = 0;
@@ -1341,50 +1342,52 @@ void teleopC::initializeOrientation(Teleop * tel, ptpInterpolator * cart_interpo
 		desired_frame.M = slv_initial_orientation;
 		desired_frame.p = tel->slv_frame_curr.p;
 
-		tel->initializeCart6dTraj(desired_frame, tel->slv_frame_curr, cart_interpolator);
 
-		// save the current arm angle to be used in the redundany handler
-		tel->psi_last[0] = tel->psi_curr[0];
+		std::vector<double> temp_j_vec = std::vector<double>(7,0.0);
+		//Inverse Kinematics
+		if (tel->kine->ik(desired_frame, tel->robot_config,  tel->psi_curr[0], temp_j_vec))
+			tel->joint_interpolator->setDestination(temp_j_vec, tel->slv_jnt.q_curr);
+		else
+			log(RTT::Warning) << "No good pose of the robot; no solution of the inverse kinematics: due to bad target or bad configuration or bad nullspace parameter" << endlog();
 
 		// remove the flag
 		reorientation_first_run = false;
 		log(Warning) << "ATTENTION! the robot is moving to the initial orientation. Hold the clutch and do not move the master until further notice!" << endlog();
-
 	}
 
-	// be used in the interpolation
-	std::vector<double> cart_6d_cmd   = std::vector<double>(6,0.0);
-
-	// interpolate the 6 Cartesian variables based on the current values and the destination
-	if(!cart_interpolator->getNextCommand( cart_6d_cmd,	 tool_reorientation_done)){
-
-		log(RTT::Error)<<  "Error P2P interpolator. Stopping the interpolator" <<endlog();
+	if(!tel->joint_interpolator->getNextCommand(tel->slv_jnt.q_cmd, reorientation_done)){
+		log(RTT::Error)<<  "Error joint_interpolator." <<endlog();
 		// to prevent looping over the error
-		tool_reorientation_done= true;
+		reorientation_done = true;
 	}
-	// convert back to frame and set as Cartesian command
-	conversions::vector6ToKDLFrame( cart_6d_cmd , tel->slv_frame_dest);
+	tel->psi_last[0] = tel->psi_curr[0];
 
-	if(tool_reorientation_done)
+
+	if(reorientation_done){
+
+		// infrom the user
 		log(Warning) << "Reorientation is finished. Now you can tele operate." << endlog();
 
+		// to make sure nothig crazy happens once the reorientation_done flag is changed
+		tel->slv_frame_cmd = tel->slv_frame_curr;
+	}
 }
+
 
 
 //--------------------------------------------------------------------------------------------------
 // calculateDesiredSlavePose
 //--------------------------------------------------------------------------------------------------
-KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometry_msgs::Pose master_msrd_pose){
+KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometry_msgs::Pose master_msrd_pose){
 
 	tf::PoseMsgToKDL(master_msrd_pose, mstr_frame_curr);
-
 	//--------------------------------------------------------------------------------------------------
 	// first clutch stuff
 	if(clutch_first_time){
 
 		// Saving the pose of the master and slave when the clutch is engaged for the first time for incremental pos
 		mstr_frame_init = mstr_frame_curr;
-		slv_frame_init = slv_frame_curr;
+		slv_frame_init = _slv_frame_curr;
 
 		// Initial filtering duration
 		first_engagement_counter_rpy = 1 * 1/dt_param;// seconds first engagement integration;
@@ -1397,16 +1400,16 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 		if(available_cam_pose){
 			temp_slv_rot =
 					mstr_to_cam_rotation.Inverse() * cam_to_slv_rotation *
-					slv_frame_curr.M *
+					_slv_frame_curr.M *
 					slv_initial_orientation.Inverse() * cam_to_slv_rotation.Inverse() *  mstr_to_cam_rotation;
 		}
 		else{
 			mstr_to_slv_rotation_backup.Inverse() *
-			( slv_frame_curr.M) *
+			( _slv_frame_curr.M) *
 			slv_initial_orientation.Inverse() * mstr_to_slv_rotation_backup ;
 		}
 
-		temp_slv_rot.GetRPY(this->mstr_rpy_avg[0],this->mstr_rpy_avg[1],this->mstr_rpy_avg[2]);
+		temp_slv_rot.GetRPY(mstr_rpy_avg[0],mstr_rpy_avg[1],mstr_rpy_avg[2]);
 
 		// delta position averaging can start from zero
 		mstr_deltapos_avg = std::vector<double>(3,0.0);
@@ -1430,8 +1433,8 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 	this->mstr_frame_curr.M.GetRPY(rpy_temp[0],rpy_temp[1],rpy_temp[2]);
 
 	for(int i= 0; i<3 ; i++){
-		this->mstr_rpy_avg[i] -= this->mstr_rpy_avg[i] / this->rpy_avg_n_variable;
-		this->mstr_rpy_avg[i] += rpy_temp[i] / this->rpy_avg_n_variable;
+		mstr_rpy_avg[i] -= mstr_rpy_avg[i] / rpy_avg_n_variable;
+		mstr_rpy_avg[i] += rpy_temp[i] / rpy_avg_n_variable;
 	}
 	//	if(int(this->rpy_avg_n_variable) % 20 ==0)	cout << "rpy_avg_n_variable " << rpy_avg_n_variable << endl;
 
@@ -1439,9 +1442,9 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometr
 	mstr_avg_frame.M = KDL::Rotation::RPY(mstr_rpy_avg[0], mstr_rpy_avg[1], mstr_rpy_avg[2]);
 
 	// Averaging the position displacement
-	if(this->first_engagement_counter_pos >= this->pos_avg_n){
-		this->pos_avg_n_variable = this->first_engagement_counter_pos;
-		this->first_engagement_counter_pos--;
+	if(first_engagement_counter_pos >= pos_avg_n){
+		pos_avg_n_variable = first_engagement_counter_pos;
+		first_engagement_counter_pos--;
 	}
 	for(int i= 0; i<3 ; i++){
 		mstr_deltapos_avg[i] -= mstr_deltapos_avg[i] / pos_avg_n_variable;
@@ -1510,6 +1513,7 @@ void teleopC::mstrToSlave(const KDL::Frame & _in_mstr, KDL::Frame & _in_slave ){
 void teleopC::setCam2SlaveRotation(KDL::Rotation in)
 {
 	available_cam_pose = true;
+	reorientation_done = false;
 	cam_to_slv_rotation = in;
 	mstr_to_slv_rotation = cam_to_slv_rotation * mstr_to_cam_rotation;
 

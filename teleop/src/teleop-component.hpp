@@ -218,7 +218,7 @@ public:
 	bool 	clutch_first_time;
 	bool 	teleop_pos_coupled,teleop_ori_coupled;
 	bool 	available_cam_pose;
-	bool 	tool_reorientation_done;
+	bool 	reorientation_done;
 	bool 	reorientation_first_run;
 	double 	transl_scale;
 
@@ -406,7 +406,7 @@ public:
 //
 //	// rotating the tool orientation to a desired one
 //	KDL::Rotation master_to_tool_orient_rotation;
-private:
+
 
 	bool  force_filter_on;
 	double transl_scale;
