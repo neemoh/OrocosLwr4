@@ -1,5 +1,5 @@
-#ifndef OROCOS_TELEOP_COMPONENT_HPP
-#define OROCOS_TELEOP_COMPONENT_HPP
+#ifndef OROCOS_LWR4KINECONTROLLER_COMPONENT_HPP
+#define OROCOS_LWR4KINECONTROLLER_COMPONENT_HPP
 
 #include <rtt/RTT.hpp>
 #include <rtt/Component.hpp>
@@ -27,7 +27,7 @@ struct stateVar{
 };
 
 // Forward Declaration
-class Teleop;
+class lwr4KineController;
 
 //-------------------------------------------------------------------------------------
 // CLASS: freqObserver
@@ -133,7 +133,7 @@ public:
 			std::vector<double> _mstr_to_cam_rotation_prop);
 
 
-	void initializeOrientation(Teleop * tel, ptpInterpolator * cart_interpolator);
+	void initializeOrientation(lwr4KineController * tel, ptpInterpolator * cart_interpolator);
 
 	//--------------------------------------------------------------------------------------------------
 	// calculate Force Bias
@@ -247,12 +247,12 @@ private:
 };
 
 //-------------------------------------------------------------------------------------
-// CLASS: Teleop OROCOS COMPONENT
+// CLASS: lwr4KineController OROCOS COMPONENT
 //-------------------------------------------------------------------------------------
-class Teleop : public RTT::TaskContext{
+class lwr4KineController : public RTT::TaskContext{
 
 public:
-	Teleop(std::string const& name);
+	lwr4KineController(std::string const& name);
 
 	// orocos main methods
 	bool configureHook();
@@ -356,15 +356,15 @@ public:
 	// Print some information about interesting things around the world!
 	void wtf();
 
-
 	void switchForceFeedback(const bool);
 
-	void switchForceFilter()
-	{
+	void switchForceFilter(){
 		cout<< "Switching force filter from:" << this->force_filter_on << " to: " << !this->force_filter_on << endl;
 		this->force_filter_on = !this->force_filter_on;
 	}
+
 	void forceSensorCalib(){to->resetForceBias();};
+
 	bool startMotion();
 	bool stopMotion();
 

@@ -1,4 +1,4 @@
-#include "teleop-component.hpp"
+#include "lwr4KineController-component.hpp"
 
 using namespace std;
 using namespace RTT;
@@ -8,7 +8,7 @@ using namespace tf;
 #define TOLERANCE 0.00001
 #define INTERPOLATION_TOLERANCE 0.001
 
-Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
+lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(name, PreOperational){
 
 	this->addPort("outputJointPos", this->joint_command_port).doc("Readings of the pose from Sigma");
 	this->addPort("outputCartPose", this->cart_command_port).doc("Readings of the pose from Sigma");
@@ -59,20 +59,20 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->addProperty("palpation_home_3dpose", 	    this->palpation_home_3dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 	this->addProperty("palpation_init_3dpose", 	    this->palpation_init_3dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 
-	this->addOperation("motionON", 					&Teleop::startMotion, 				this).doc("Starts the motion mode");
-	this->addOperation("motionOff", 			    &Teleop::stopMotion, 				this).doc("Stops the motion");
-	this->addOperation("changeMotionMode", 			&Teleop::changeMotionMode, 			this).doc("Changes the motion mode");
-	this->addOperation("setPTPCartPosDestination",  &Teleop::setPTPCartDestination,  	this).doc("setPTPCartDestination");
-	this->addOperation("setPTPJointDestination", 	&Teleop::setPTPJointDestination,	this).doc("setPTPCartDestination");
-	this->addOperation("goHome", 					&Teleop::goHome, 					this).doc("setPTPJointDestination to saved home position");
-	this->addOperation("wtf", 						&Teleop::wtf, 						this).doc("sShow current measurements and states");
-	this->addOperation("switchForceFeedback", 		&Teleop::switchForceFeedback, 		this).doc("sShow current measurements and states");
-	this->addOperation("calibFF", 					&Teleop::forceSensorCalib, 			this).doc("sShow current measurements and states");
-	this->addOperation("forceFilterSwitch", 		&Teleop::forceFilterSwitch, 		this).doc("Switches force filter on->off and vice versa");
-	this->addOperation("switchPositionCoupling", 	&Teleop::switchPositionCoupling, 	this).doc("Switches the master/slave coupling of position. On or Off");
-	this->addOperation("switchOrientationCoupling",	&Teleop::switchOrientationCoupling,	this).doc("Switches the master/slave coupling of orientation. On or Off");
-	this->addOperation("setOrientationAvgWindow",	&Teleop::setOrientationAvgWindow,	this).doc("Switches the master/slave coupling of orientation. On or Off");
-	this->addOperation("updateCam2SlavePose",		&Teleop::updateCam2SlavePose,		this).doc("Updates the transformation between the camera and the slaveor Off");
+	this->addOperation("motionON", 					&lwr4KineController::startMotion, 				this).doc("Starts the motion mode");
+	this->addOperation("motionOff", 			    &lwr4KineController::stopMotion, 				this).doc("Stops the motion");
+	this->addOperation("changeMotionMode", 			&lwr4KineController::changeMotionMode, 			this).doc("Changes the motion mode");
+	this->addOperation("setPTPCartPosDestination",  &lwr4KineController::setPTPCartDestination,  	this).doc("setPTPCartDestination");
+	this->addOperation("setPTPJointDestination", 	&lwr4KineController::setPTPJointDestination,	this).doc("setPTPCartDestination");
+	this->addOperation("goHome", 					&lwr4KineController::goHome, 					this).doc("setPTPJointDestination to saved home position");
+	this->addOperation("wtf", 						&lwr4KineController::wtf, 						this).doc("sShow current measurements and states");
+	this->addOperation("switchForceFeedback", 		&lwr4KineController::switchForceFeedback, 		this).doc("sShow current measurements and states");
+	this->addOperation("calibFF", 					&lwr4KineController::forceSensorCalib, 			this).doc("sShow current measurements and states");
+	this->addOperation("forceFilterSwitch", 		&lwr4KineController::switchForceFilter, 		this).doc("Switches force filter on->off and vice versa");
+	this->addOperation("switchPositionCoupling", 	&lwr4KineController::switchPositionCoupling, 	this).doc("Switches the master/slave coupling of position. On or Off");
+	this->addOperation("switchOrientationCoupling",	&lwr4KineController::switchOrientationCoupling,	this).doc("Switches the master/slave coupling of orientation. On or Off");
+	this->addOperation("setOrientationAvgWindow",	&lwr4KineController::setOrientationAvgWindow,	this).doc("Switches the master/slave coupling of orientation. On or Off");
+	this->addOperation("updateCam2SlavePose",		&lwr4KineController::updateCam2SlavePose,		this).doc("Updates the transformation between the camera and the slaveor Off");
 
 
 	this->num_joints				= 7;
@@ -91,10 +91,10 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 	this->new_cart_dest 			= false;
 	this->force_filter_on			= false;
 
-	std::cout << "Teleop constructed!" <<std::endl;
+	std::cout << "lwr4KineController constructed!" <<std::endl;
 }
 
-bool Teleop::configureHook(){
+bool lwr4KineController::configureHook(){
 	RTT::Logger::In in(this->getName());
 
 	if (this->isConfigured())
@@ -242,11 +242,11 @@ bool Teleop::configureHook(){
 	cout << "Motion mode is: "<< this->motion_mode << "\n" <<endl;
 	cout << "Tool to end-effector translation is: x= " << this->tool_to_ee_tr_prop[0] <<" y= " << this->tool_to_ee_tr_prop[1]<<" z= " << this->tool_to_ee_tr_prop[2] << endl;
 
-	std::cout << "Teleop configured!" <<std::endl;
+	std::cout << "lwr4KineController configured!" <<std::endl;
 	return true;
 }
 
-bool Teleop::startHook(){
+bool lwr4KineController::startHook(){
 
 	if(this->isRunning())
 		return false;
@@ -258,7 +258,7 @@ bool Teleop::startHook(){
 
 
 
-void Teleop::updateHook(){
+void lwr4KineController::updateHook(){
 
 	RTT::Logger::In in(this->getName());
 
@@ -606,19 +606,19 @@ void Teleop::updateHook(){
 
 
 
-void Teleop::stopHook() {
-	std::cout << "Teleop executes stopping !" <<std::endl;
+void lwr4KineController::stopHook() {
+	std::cout << "lwr4KineController executes stopping !" <<std::endl;
 
 }
 
-void Teleop::cleanupHook() {
+void lwr4KineController::cleanupHook() {
 	delete this->fo;
 	delete this->kine;
-	std::cout << "Teleop cleaning up !" <<std::endl;
+	std::cout << "lwr4KineController cleaning up !" <<std::endl;
 }
 
 
-void Teleop::jointStateMotionObserver(std::vector<double> q_curr, std::vector<double> q_dest, std::vector<double>& q_cmd ){
+void lwr4KineController::jointStateMotionObserver(std::vector<double> q_curr, std::vector<double> q_dest, std::vector<double>& q_cmd ){
 
 	std::vector<double> temp_vec(7, 0.0);
 	if(this->teleop_interpolate_done){
@@ -655,7 +655,7 @@ void Teleop::jointStateMotionObserver(std::vector<double> q_curr, std::vector<do
 }
 
 
-double Teleop::calculateBestArmAngle(){
+double lwr4KineController::calculateBestArmAngle(){
 
 	vector<double> psi_chosen(1,0.0);
 	vector<double> psi_cmd(1,0.0);
@@ -728,7 +728,7 @@ double Teleop::calculateBestArmAngle(){
 
 
 ///------------------------------------------------------------------------------------------------------------------------------------
-bool Teleop::startMotion() {
+bool lwr4KineController::startMotion() {
 	Logger::In in(this->getName());
 
 	if (!this->isRunning()) {
@@ -749,10 +749,10 @@ bool Teleop::startMotion() {
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop updateCam2SlavePose
+//lwr4KineController updateCam2SlavePose
 //--------------------------------------------------------------------------------------------------
 
-void Teleop::updateCam2SlavePose(){
+void lwr4KineController::updateCam2SlavePose(){
 
 	Logger::In in(this->getName());
 
@@ -787,9 +787,9 @@ void Teleop::updateCam2SlavePose(){
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop changeMotionMode
+//lwr4KineController changeMotionMode
 //--------------------------------------------------------------------------------------------------
-bool Teleop::changeMotionMode(const int mode) {
+bool lwr4KineController::changeMotionMode(const int mode) {
 	Logger::In in(this->getName());
 
 	if (mode < 0 || mode > 4) {
@@ -812,9 +812,9 @@ bool Teleop::changeMotionMode(const int mode) {
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop stopMotion
+//lwr4KineController stopMotion
 //--------------------------------------------------------------------------------------------------
-bool Teleop::stopMotion() {
+bool lwr4KineController::stopMotion() {
 
 	// Action to be performed to stop the movement;
 	Logger::In in(this->getName());
@@ -846,9 +846,9 @@ bool Teleop::stopMotion() {
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop setPTPCartDestination
+//lwr4KineController setPTPCartDestination
 //--------------------------------------------------------------------------------------------------
-bool Teleop::setPTPCartDestination(const std::vector<double>& vars) {
+bool lwr4KineController::setPTPCartDestination(const std::vector<double>& vars) {
 	log(RTT::Debug) << "Setting Cartesian destination" << endlog();
 	if (this->destination_reached) {
 
@@ -886,9 +886,9 @@ bool Teleop::setPTPCartDestination(const std::vector<double>& vars) {
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop setPTPJointDestination
+//lwr4KineController setPTPJointDestination
 //--------------------------------------------------------------------------------------------------
-bool Teleop::setPTPJointDestination(std::vector<double> vars) {
+bool lwr4KineController::setPTPJointDestination(std::vector<double> vars) {
 	Logger::In in(this->getName());
 	log(RTT::Debug) << "Setting joints destination" << endlog();
 
@@ -929,9 +929,9 @@ bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop initializeCart6dTraj
+//lwr4KineController initializeCart6dTraj
 //--------------------------------------------------------------------------------------------------
-void Teleop::initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::Frame &  slv_frame_curr, ptpInterpolator * _cart_interpolator){
+void lwr4KineController::initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::Frame &  slv_frame_curr, ptpInterpolator * _cart_interpolator){
 
 	std::vector<double> slv_cart_6d_dest = std::vector<double>(6,0.0);
 	std::vector<double> slv_cart_6d_curr = std::vector<double>(6,0.0);
@@ -956,9 +956,9 @@ void Teleop::initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop initializeCart6dTraj
+//lwr4KineController initializeCart6dTraj
 //--------------------------------------------------------------------------------------------------
-void Teleop::switchForceFeedback(bool input){
+void lwr4KineController::switchForceFeedback(bool input){
 	Logger::In in(this->getName());
 	if(this->to->force_feedback_on == input){
 		log(RTT::Info) << "No change needed." << endlog();
@@ -973,7 +973,7 @@ void Teleop::switchForceFeedback(bool input){
 
 
 ///------------------------------------------------------------------------------------------------------------------------------------
-void Teleop::wtf(){
+void lwr4KineController::wtf(){
 
 	if(this->motionOn) 	cout << "Motion is ON." << endl;
 	else 				cout << "Motion is Off." << endl;
@@ -1011,7 +1011,7 @@ void Teleop::wtf(){
 }
 
 ///------------------------------------------------------------------------------------------------------------------------------------
-bool Teleop::clipToLimits(std::vector<double>& vars, std::vector<double> min_limits, std::vector<double> max_limits) {
+bool lwr4KineController::clipToLimits(std::vector<double>& vars, std::vector<double> min_limits, std::vector<double> max_limits) {
 
 	if(vars.size() != max_limits.size() || vars.size() != min_limits.size())
 		return false;
@@ -1086,7 +1086,7 @@ void freqObserver::check(){
 //					PTPINTERPOLATOR CLASS
 //--------------------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------------------
-//Teleop P2PInterpolator
+//lwr4KineController P2PInterpolator
 //--------------------------------------------------------------------------------------------------
 ptpInterpolator::ptpInterpolator(std::vector<double> _v_max, std::vector<double> _a_max, double _dt_param){
 
@@ -1114,7 +1114,7 @@ ptpInterpolator::ptpInterpolator(std::vector<double> _v_max, std::vector<double>
 
 
 //--------------------------------------------------------------------------------------------------
-//Teleop P2PInterpolator
+//lwr4KineController P2PInterpolator
 //--------------------------------------------------------------------------------------------------
 bool ptpInterpolator::setDestination(const std::vector<double> _p_dest, const std::vector<double> _p_curr){
 
@@ -1354,7 +1354,7 @@ teleopC::teleopC(double _period,
 
 
 
-void teleopC::initializeOrientation(Teleop * tel, ptpInterpolator * cart_interpolator){
+void teleopC::initializeOrientation(lwr4KineController * tel, ptpInterpolator * cart_interpolator){
 
 	if(reorientation_first_run){
 
@@ -1648,7 +1648,7 @@ void teleopC::switchOrientationCoupling(const bool input){
 
 
 
-ORO_CREATE_COMPONENT(Teleop)
+ORO_CREATE_COMPONENT(lwr4KineController)
 
 
 

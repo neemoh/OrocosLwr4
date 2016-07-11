@@ -1,6 +1,6 @@
 <package>
-	<description brief="Orocos teleop Component package">
-        	This package contains the components of the teleop package
+	<description brief="Orocos lwr4KineController Component package">
+        	This package contains the components of the lwr4KineController package
 	</description>
 	<!--NOTE: set the license and author before you publish this code-->
 	<license></license>
