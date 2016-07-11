@@ -194,6 +194,7 @@ bool lwr4KineController::configureHook(){
 	this->port_cart_twist.setDataSample(this->tmp_twist);
 	this->force_to_master_port.setDataSample(this->mstr_wrench_cmd);
 	this->cart_FK_port.setDataSample(this->tmp_pose_msg);
+
 	geometry_msgs::Quaternion temp_quat;
 	this->master_to_slave_rot_port.setDataSample(temp_quat);
 
@@ -222,7 +223,7 @@ bool lwr4KineController::configureHook(){
 	this->kine = new LWR4Kinematics(this->tmp_frame);
 
 	// construct the teleop object
-	this->to = new teleopC (
+	this->to = new teleop (
 			this->period_prop,
 			this->transl_scale_prop,
 			this->teleop_ori_coupled_prop,
@@ -251,6 +252,11 @@ bool lwr4KineController::startHook(){
 	if(this->isRunning())
 		return false;
 
+	// Doing an FK to get the current end-effector rotation to be set as slv_initial_orientation when
+	// camera is not available
+	this->readLwr4JointsAndDoFK();
+
+	// setting the transformations
 	this->updateCam2SlavePose();
 
 	return true;
@@ -272,32 +278,10 @@ void lwr4KineController::updateHook(){
 		log(RTT::Error)<< "Port " << this->master_msrd_pose_port.getName() << " Is not connected. Stopping the component." << endlog();
 		this->stopHook();
 	}
-	if( this->joint_msrd_port.read(this->tmp_joint_state) == RTT::NewData) {
 
-		// save current joint positions
-		conversions::jointStateToJointPosVector(this->tmp_joint_state, this->slv_jnt.q_curr);
+	// read lwr4 joints and do FK and calculate the Jacobian
+	this->readLwr4JointsAndDoFK();
 
-		//Forward kinematics
-		//		this->kine->fk(this->slv_jnt.q_curr, this->robot_config, this->psi_curr[0], this->slv_frame_curr);
-		// manipulability indexes
-		std::vector<KDL::Frame> joint_frames(this->num_joints + 1, KDL::Frame::Identity());
-
-		this->kine->fk_all(this->slv_jnt.q_curr, this->robot_config, this->psi_curr[0], joint_frames);
-		this->slv_frame_curr = joint_frames[7];
-
-		// calculate the jacobian
-		this->kine->jacobian(joint_frames, jacob);
-
-		// calculate the manipulability indices
-		this->kine->getManipulabilityIdx(jacob, 0, this->manipA);
-		this->kine->getManipulabilityIdx(jacob, 1, this->manipT);
-		this->kine->getManipulabilityIdx(jacob, 2, this->manipR);
-
-		// Write the FK pose on the port
-		tf::PoseKDLToMsg(this->slv_frame_curr, this->tmp_pose_msg );
-		this->cart_FK_port.write(this->tmp_pose_msg);
-
-	}
 
 	//Reading the haptic device's clutch state
 	if(this->master_clutch_port.connected())
@@ -450,7 +434,7 @@ void lwr4KineController::updateHook(){
 				else if (this->master_msrd_pose_port.read(this->tmp_pose_msg) != RTT::NoData){
 
 					// pose validity check
-					if(this->manipA< 0.005){
+					if(this->manipA< 0.01){
 						log(Warning) << "ATTENTION! the robot is ill-posed. Please stop tele-operation and move the robot to a better configuration." << endlog();
 						this->changeMotionMode(1);
 						log(Warning) << "Motion mode is changed to 1. Please use setPTPJointDestination() and move to a better position." << endlog();
@@ -618,6 +602,40 @@ void lwr4KineController::cleanupHook() {
 }
 
 
+void lwr4KineController::readLwr4JointsAndDoFK(){
+
+	if( this->joint_msrd_port.read(this->tmp_joint_state) == RTT::NewData) {
+
+		// save current joint positions
+		conversions::jointStateToJointPosVector(this->tmp_joint_state, this->slv_jnt.q_curr);
+
+		//Forward kinematics
+		//		this->kine->fk(this->slv_jnt.q_curr, this->robot_config, this->psi_curr[0], this->slv_frame_curr);
+		// manipulability indexes
+		std::vector<KDL::Frame> joint_frames(this->num_joints + 1, KDL::Frame::Identity());
+
+		this->kine->fk_all(this->slv_jnt.q_curr, this->robot_config, this->psi_curr[0], joint_frames);
+		this->slv_frame_curr = joint_frames[7];
+
+		// Write the FK pose on the port
+		tf::PoseKDLToMsg(this->slv_frame_curr, this->tmp_pose_msg );
+		this->cart_FK_port.write(this->tmp_pose_msg);
+
+		// calculate the jacobian
+		this->kine->jacobian(joint_frames, jacob);
+
+		// calculate the manipulability indices
+		this->kine->getManipulabilityIdx(jacob, 0, this->manipA);
+		this->kine->getManipulabilityIdx(jacob, 1, this->manipT);
+		this->kine->getManipulabilityIdx(jacob, 2, this->manipR);
+
+	}
+
+}
+
+
+
+
 void lwr4KineController::jointStateMotionObserver(std::vector<double> q_curr, std::vector<double> q_dest, std::vector<double>& q_cmd ){
 
 	std::vector<double> temp_vec(7, 0.0);
@@ -773,8 +791,8 @@ void lwr4KineController::updateCam2SlavePose(){
 	}
 	else{
 		log(RTT::Warning)<< "Port " << this->cam_to_slave_pose_port.getName() << " is either not connected or does not have data. Using backup master to slave rotation" << endlog();
-		// No need to do anything. teleop is initialized with back_up roation.
-
+		// No need to do anything. teleop is initialized with back_up rotation.
+		this->to->slv_initial_orientation = this->slv_frame_curr.M;
 	}
 
 
@@ -982,6 +1000,7 @@ void lwr4KineController::wtf(){
 	cout << "Tool to end-effector translation is: x= " << this->tool_to_ee_tr_prop[0] <<" y= " << this->tool_to_ee_tr_prop[1]<<" z= " << this->tool_to_ee_tr_prop[2] << endl;
 	this->to->printParameters();
 
+	cout << "Current manipulability index is         : " << this->manipA <<"\n"<< endl;
 	cout << "Current config param is                 : " << this->robot_config << endl;
 	cout << "Current arm angle is                    : " << this->psi_curr[0] <<"\n"<< endl;
 
@@ -1293,7 +1312,7 @@ bool ptpInterpolator::getNextCommand(std::vector<double> & p_interpd, bool & des
 //--------------------------------------------------------------------------------------------------
 // teleop constructor
 //--------------------------------------------------------------------------------------------------
-teleopC::teleopC(double _period,
+teleop::teleop(double _period,
 		double _transl_scale,
 		bool _teleop_ori_coupled,
 		bool _teleop_pos_coupled,
@@ -1332,7 +1351,7 @@ teleopC::teleopC(double _period,
 		mstr_to_cam_rotation 		 = KDL::Rotation::Quaternion(_mstr_to_cam_rotation_prop[0], _mstr_to_cam_rotation_prop[1], _mstr_to_cam_rotation_prop[2], _mstr_to_cam_rotation_prop[3]);
 
 	// slv_initial_orientation is the zero orientation zero of the slave. it is initialized as the tool directing
-	// downwards. The RotZ is to put joint 7 away from limits
+	// downwards. The RotZ is to put joint 7 away from limits.
 	slv_initial_orientation = KDL::Rotation::RotX(M_PI) * KDL::Rotation::RotZ(-M_PI/2);
 
 	first_engagement_counter_rpy = 0;
@@ -1340,7 +1359,7 @@ teleopC::teleopC(double _period,
 
 	clutch_first_time = true;
 	available_cam_pose = false;
-	reorientation_done = false;
+	reorientation_done = true;
 	reorientation_first_run	= true;
 
 	pos_avg_n_variable = 0;
@@ -1354,7 +1373,7 @@ teleopC::teleopC(double _period,
 
 
 
-void teleopC::initializeOrientation(lwr4KineController * tel, ptpInterpolator * cart_interpolator){
+void teleop::initializeOrientation(lwr4KineController * tel, ptpInterpolator * cart_interpolator){
 
 	if(reorientation_first_run){
 
@@ -1398,9 +1417,10 @@ void teleopC::initializeOrientation(lwr4KineController * tel, ptpInterpolator * 
 //--------------------------------------------------------------------------------------------------
 // calculateDesiredSlavePose
 //--------------------------------------------------------------------------------------------------
-KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometry_msgs::Pose master_msrd_pose){
+KDL::Frame teleop::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometry_msgs::Pose master_msrd_pose){
 
 	tf::PoseMsgToKDL(master_msrd_pose, mstr_frame_curr);
+
 	//--------------------------------------------------------------------------------------------------
 	// first clutch stuff
 	if(clutch_first_time){
@@ -1413,9 +1433,9 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geomet
 		first_engagement_counter_rpy = 1 * 1/dt_param;// seconds first engagement integration;
 		first_engagement_counter_pos = 0.5 * 1/dt_param;// seconds first engagement integration;
 
-		// Setting the initial value for the averaging of the pos and orientation as that of the slave taken in
+		// Setting the initial value for the averaging of the orientation as that of the slave taken in
 		// master's ref frame since the master may move a bit when the clutch is not engaged, it is safer to start
-		// the averaging with the pos and ori of the slave itself.
+		// the averaging with the ori of the slave itself.
 		KDL::Rotation temp_slv_rot;
 		if(available_cam_pose){
 			temp_slv_rot =
@@ -1424,12 +1444,13 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geomet
 					slv_initial_orientation.Inverse() * cam_to_slv_rotation.Inverse() *  mstr_to_cam_rotation;
 		}
 		else{
-			mstr_to_slv_rotation_backup.Inverse() *
-			( _slv_frame_curr.M) *
-			slv_initial_orientation.Inverse() * mstr_to_slv_rotation_backup ;
+			temp_slv_rot =
+					mstr_to_slv_rotation_backup.Inverse() *
+					_slv_frame_curr.M *
+					slv_initial_orientation.Inverse() * mstr_to_slv_rotation_backup ;
 		}
 
-		temp_slv_rot.GetRPY(mstr_rpy_avg[0],mstr_rpy_avg[1],mstr_rpy_avg[2]);
+		temp_slv_rot.GetRPY(mstr_rpy_avg[0], mstr_rpy_avg[1], mstr_rpy_avg[2]);
 
 		// delta position averaging can start from zero
 		mstr_deltapos_avg = std::vector<double>(3,0.0);
@@ -1449,12 +1470,15 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geomet
 		this->first_engagement_counter_rpy--;
 	}
 
-	std::vector<double>	rpy_temp = std::vector<double>(3,0.0);
-	this->mstr_frame_curr.M.GetRPY(rpy_temp[0],rpy_temp[1],rpy_temp[2]);
+	std::vector<double>	mstr_curr_rpy= std::vector<double>(3,0.0);
+	this->mstr_frame_curr.M.GetRPY(mstr_curr_rpy[0], mstr_curr_rpy[1], mstr_curr_rpy[2]);
+
+	//	cout << "mstr_rpy_avg " << mstr_rpy_avg << endl;
+	//	cout << "mstr_curr_rpy " << mstr_curr_rpy << endl;
 
 	for(int i= 0; i<3 ; i++){
 		mstr_rpy_avg[i] -= mstr_rpy_avg[i] / rpy_avg_n_variable;
-		mstr_rpy_avg[i] += rpy_temp[i] / rpy_avg_n_variable;
+		mstr_rpy_avg[i] += mstr_curr_rpy[i] / rpy_avg_n_variable;
 	}
 	//	if(int(this->rpy_avg_n_variable) % 20 ==0)	cout << "rpy_avg_n_variable " << rpy_avg_n_variable << endl;
 
@@ -1492,7 +1516,7 @@ KDL::Frame teleopC::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geomet
 //--------------------------------------------------------------------------------------------------
 // transformations from aster to slave
 //--------------------------------------------------------------------------------------------------
-void teleopC::mstrToSlave(const KDL::Frame & _in_mstr, KDL::Frame & _in_slave ){
+void teleop::mstrToSlave(const KDL::Frame & _in_mstr, KDL::Frame & _in_slave ){
 
 	if(available_cam_pose){
 		//DELTA POSITION Reference frame transformation from master to slave
@@ -1530,7 +1554,7 @@ void teleopC::mstrToSlave(const KDL::Frame & _in_mstr, KDL::Frame & _in_slave ){
 // setCam2SlaveRotation
 //--------------------------------------------------------------------------------------------------
 // set the rotation from camera to slave.
-void teleopC::setCam2SlaveRotation(KDL::Rotation in)
+void teleop::setCam2SlaveRotation(KDL::Rotation in)
 {
 	available_cam_pose = true;
 	reorientation_done = false;
@@ -1548,7 +1572,7 @@ void teleopC::setCam2SlaveRotation(KDL::Rotation in)
 //--------------------------------------------------------------------------------------------------
 // calculateForceBias
 //--------------------------------------------------------------------------------------------------
-void teleopC::calculateForceBias(geometry_msgs::Wrench wrench_msrd){
+void teleop::calculateForceBias(geometry_msgs::Wrench wrench_msrd){
 
 	//Estimating current bias of the force sensor by averaging 100 consecutive samples
 	if(!force_bias_computed){
@@ -1572,7 +1596,7 @@ void teleopC::calculateForceBias(geometry_msgs::Wrench wrench_msrd){
 }
 
 
-void teleopC::resetForceBias(){
+void teleop::resetForceBias(){
 	force_bias = KDL::Vector::Zero();
 	force_bias_computed = false;
 }
@@ -1580,7 +1604,7 @@ void teleopC::resetForceBias(){
 //--------------------------------------------------------------------------------------------------
 // getForceFeedback
 //--------------------------------------------------------------------------------------------------
-geometry_msgs::Wrench teleopC::getForceFeedback(KDL::Frame robot_pose, geometry_msgs::Wrench wrench_msrd){
+geometry_msgs::Wrench teleop::getForceFeedback(KDL::Frame robot_pose, geometry_msgs::Wrench wrench_msrd){
 
 	/////////////////////////////////////// Calculating force
 	KDL::Vector force_msrd;
@@ -1610,7 +1634,7 @@ geometry_msgs::Wrench teleopC::getForceFeedback(KDL::Frame robot_pose, geometry_
 //--------------------------------------------------------------------------------------------------
 // print out the parameters
 //--------------------------------------------------------------------------------------------------
-void teleopC::printParameters(){
+void teleop::printParameters(){
 
 	cout << "Number of orientation samples averaged in teleop : " << rpy_avg_n << endl;
 	cout << "Number of position samples averaged in teleop    : " << pos_avg_n << endl;
@@ -1622,7 +1646,7 @@ void teleopC::printParameters(){
 //--------------------------------------------------------------------------------------------------
 // switch  Position  Coupling
 //--------------------------------------------------------------------------------------------------
-void teleopC::switchPositionCoupling(const bool input){
+void teleop::switchPositionCoupling(const bool input){
 	if(teleop_pos_coupled == input){
 		log(RTT::Info) << "No change needed." << endlog();
 		return;
@@ -1635,7 +1659,7 @@ void teleopC::switchPositionCoupling(const bool input){
 //--------------------------------------------------------------------------------------------------
 // switch  Orientation  Coupling
 //--------------------------------------------------------------------------------------------------
-void teleopC::switchOrientationCoupling(const bool input){
+void teleop::switchOrientationCoupling(const bool input){
 	if(teleop_ori_coupled == input){
 		log(RTT::Info) << "No change needed." << endlog();
 		return;
@@ -1655,8 +1679,6 @@ ORO_CREATE_COMPONENT(lwr4KineController)
 
 
 //////////// CODE CEMETERY!!!
-
-
 
 //		case 5:
 //			/////////////////////////////// TEEEEEEEEEEEEEST MODE ///////////////////////////////

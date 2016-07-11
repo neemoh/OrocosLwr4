@@ -113,13 +113,13 @@ private:
 //-------------------------------------------------------------------------------------
 // CLASS: tele-operation
 //-------------------------------------------------------------------------------------
-class teleopC{
+class teleop{
 public:
 
 	//-------------------------------------------------------------------------------------
 	// Constructor
 	//-------------------------------------------------------------------------------------
-	teleopC(double _period,
+	teleop(double _period,
 			double _transl_scale,
 			bool _teleop_ori_coupled,
 			bool _teleop_pos_coupled,
@@ -350,6 +350,9 @@ public:
 	// Send the robot to the home position through joint space trajectory.
 	bool goHome(){return(setPTPJointDestination(slv_jnt_home));	};
 
+
+	void readLwr4JointsAndDoFK();
+
 	//-------------------------------------------------------------------------------------
 	// WTF
 	//-------------------------------------------------------------------------------------
@@ -372,7 +375,7 @@ public:
 
 	// frequency observer object pointer
 	freqObserver * fo;
-	teleopC * to;
+	teleop * to;
 	ptpInterpolator * joint_interpolator;
 	ptpInterpolator * cart_interpolator;
 
