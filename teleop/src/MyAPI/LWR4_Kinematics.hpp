@@ -105,11 +105,14 @@ class LWR4Kinematics{
 public:
 
 	// CONSTRUCTOR
-	// ztool: 		  In case a tool is attached to the robot that is at
-	//                [0 0 ztool] in the 7th joint reference frame, you can use ztool to
-	//                directly find the Cartesian position of the tool tip. For any different
-	//                tool setup just use the corresponding transformation.
-	LWR4Kinematics(double _ztool);
+	// _tool_to_ee:   This is the transformation matrix from the tool installed on the robot
+	//				  to the end-effector reported in the end-effector coordinate frame.
+	//				  Set identity if no tool is attached. Note that if the information of the
+	//				  tool is different from that set in the krc the controller will not work
+	//				  properly.
+
+
+	LWR4Kinematics(KDL::Frame _tool_to_ee);
 
 	// FK METHOD
 	// Finds the Cartesian pose, the config and psi for a given joint positions vector.
@@ -121,7 +124,7 @@ public:
 
 	// Jacobian
 	// gets the outbput frame vector of the fk_all and calculates the
-	void jacobian( const std::vector<KDL::Frame> linkMatrices, KDL::Jacobian & jac);
+	void jacobian( const std::vector<KDL::Frame> & linkMatrices, KDL::Jacobian & jac);
 
 	// get Manipulability
 	// Calculates the manipulability index for a given Jacobian
@@ -162,7 +165,6 @@ private:
 private:
 
 	//DH parameters - lengths
-	double ztool;
 	double dbs;
 	double dse;
 	double dew;
@@ -172,8 +174,8 @@ private:
 	double jlim1; // rads = 170 degrees for joints: 1 3 5 7
 	double jlim2; // rads = 120 degrees for joints: 2 4 6
 
-	// the Cartesian destination
-	KDL::Frame T;
+	// the Cartesian destination. end-effector to base
+	KDL::Frame T_ee_to_base;
 
 	// configuration parameter calculated from FK
 	unsigned int config_fk;
@@ -183,6 +185,10 @@ private:
 
 	// the arm angle (redundancy parameter) calculated from FK
 	double psi_fk;
+
+	// transformation from the tool installed on the robot to the end-effector
+	// and its inverse.
+	KDL::Frame tr_tool_to_ee, tr_ee_to_tool;
 
 	// IK matrices reference matrices
 	tf::Matrix3x3 As, Bs, Cs,Aw, Bw, Cw;

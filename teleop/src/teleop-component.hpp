@@ -344,16 +344,31 @@ public:
 	// sets the value for the teleop object..
 	void updateCam2SlavePose();
 
+	//-------------------------------------------------------------------------------------
+	// goHome
+	//-------------------------------------------------------------------------------------
+	// Send the robot to the home position through joint space trajectory.
+	bool goHome(){return(setPTPJointDestination(slv_jnt_home));	};
 
-	bool goHome();
+	//-------------------------------------------------------------------------------------
+	// WTF
+	//-------------------------------------------------------------------------------------
+	// Print some information about interesting things around the world!
 	void wtf();
+
+
 	void switchForceFeedback(const bool);
-	void forceFilterSwitch();
+
+	void switchForceFilter()
+	{
+		cout<< "Switching force filter from:" << this->force_filter_on << " to: " << !this->force_filter_on << endl;
+		this->force_filter_on = !this->force_filter_on;
+	}
 	void forceSensorCalib(){to->resetForceBias();};
 	bool startMotion();
 	bool stopMotion();
 
-
+public:
 
 	// frequency observer object pointer
 	freqObserver * fo;
@@ -437,7 +452,6 @@ protected:
 	double period_prop;
 	double force_scale_prop;
 	double transl_scale_prop;
-	double tool_zlength_prop;
 	double rpy_avg_n_prop;
 	double pos_avg_n_prop;
 	unsigned int motion_mode_prop;
@@ -448,6 +462,7 @@ protected:
 	std::vector<double> slv_jnt_home_prop;
 	std::vector<double> mstr_to_slv_rotation_prop, mstr_to_cam_rotation_prop, fs_to_ee_rotation_prop, mstr_to_tool_orient_prop;
 	std::vector<double> palpation_init_3dpose_prop,palpation_home_3dpose_prop;
+	std::vector<double> tool_to_ee_tr_prop;
 
 
 	RTT::InputPort<geometry_msgs::Pose> 					master_msrd_pose_port;		// DataPort containing the current pose

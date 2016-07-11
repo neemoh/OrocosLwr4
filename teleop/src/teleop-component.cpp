@@ -36,7 +36,7 @@ Teleop::Teleop(std::string const& name) : TaskContext(name, PreOperational){
 
 	this->addProperty("force_scale", force_scale_prop).doc("Home joint positions]");
 	this->addProperty("translation_scale", transl_scale_prop).doc("scale of translation");
-	this->addProperty("tool_zlength", tool_zlength_prop).doc("Rigid transformation (quaternion) from force sensor to the endeffector. (Attention to x,y,z,w order).");
+	this->addProperty("tool_to_ee_tr", tool_to_ee_tr_prop).doc("Rigid transformation from the tool to the end-effector.");
 	this->addProperty("master_orientation_average_steps", 	rpy_avg_n_prop).doc("The number of averaging steps for the orientation (rpy) of the master device.");
 	this->addProperty("master_position_average_steps", 		pos_avg_n_prop).doc("The number of averaging steps for the position (xyz) of the master device.");
 
@@ -102,33 +102,46 @@ bool Teleop::configureHook(){
 
 	/////////////////////////////////     Checking  properties' size       ////////////////////////////////
 	if (this->slv_jnt_home_prop.size() != this->num_joints) {
-		log(RTT::Error) << "Size of slv_jnt_home_prop does not match: " << this->num_joints << endlog();		return false;
+		log(RTT::Error) << "Size of slv_jnt_home_prop does not match: " << this->num_joints << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_cart_q_min_prop.size() != this->num_cart_vars) {
-		log(RTT::Error) << "Size of slv_cart_p_min_prop does not match: " << this->num_cart_vars << endlog();		return false;
+		log(RTT::Error) << "Size of slv_cart_p_min_prop is not correct. I expect: " << this->num_cart_vars << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_cart_q_max_prop.size() != this->num_cart_vars) {
-		log(RTT::Error) << "Size of slv_cart_p_max_prop does not match: " << this->num_cart_vars << endlog();		return false;
+		log(RTT::Error) << "Size of slv_cart_p_max_prop is not correct. I expect: " << this->num_cart_vars << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_cart_v_max_prop.size() != this->num_cart_vars) {
-		log(RTT::Error) << "Size of slv_cart_vel_max_prop does not match: " << this->num_cart_vars << endlog();		return false;
+		log(RTT::Error) << "Size of slv_cart_vel_max_prop is not correct. I expect: " << this->num_cart_vars << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_cart_a_max_prop.size() != this->num_cart_vars) {
-		log(RTT::Error) << "Size of slv_cart_acc_max_prop does not match: " << this->num_cart_vars << endlog();		return false;
+		log(RTT::Error) << "Size of slv_cart_acc_max_prop is not correct. I expect: " << this->num_cart_vars << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_jnt_q_min_prop.size() != this->num_joints) {
-		log(RTT::Error) << "Size of slv_joint_p_min_prop does not match: " << this->num_joints << endlog();		return false;
+		log(RTT::Error) << "Size of slv_joint_p_min_prop is not correct. I expect: " << this->num_joints << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_jnt_q_max_prop.size() != this->num_joints) {
-		log(RTT::Error) << "Size of slv_jnt_q_max_prop does not match: " << this->num_joints << endlog();		return false;
+		log(RTT::Error) << "Size of slv_jnt_q_max_prop is not correct. I expect: " << this->num_joints << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_jnt_v_max_prop.size() != this->num_joints) {
-		log(RTT::Error) << "Size of slv_jnt_v_max_prop does not match: " << this->num_joints << endlog();		return false;
+		log(RTT::Error) << "Size of slv_jnt_v_max_prop is not correct. I expect: " << this->num_joints << " elements. "<<  endlog();
+		return false;
 	}
 	if (this->slv_jnt_a_max_prop.size() != this->num_joints) {
-		log(RTT::Error) << "Size of slv_joint_acc_max_prop does not match: " << this->num_joints << endlog();		return false;
+		log(RTT::Error) << "Size of slv_joint_acc_max_prop is not correct. I expect: " << this->num_joints << " elements. "<<  endlog();
+		return false;
 	}
 
+	if (this->tool_to_ee_tr_prop.size() != this->num_joints) {
+		log(RTT::Error) << "Size of tool_to_ee_tr_prop is not correct. I expect: " << this->num_joints << " elements. "<<  endlog();
+		return false;
+	}
 	/////////////////////////////////      Variable initialization     //////////////////////////////
 	if (!this->changeMotionMode(this->motion_mode_prop))
 		return false;
@@ -204,7 +217,9 @@ bool Teleop::configureHook(){
 	//	this->v_filt = new FOAWBestFit(10, 1/fo->dt_param, 0.0001);
 
 	// construct the Kinematics object
-	this->kine = new LWR4Kinematics(this->tool_zlength_prop);
+	conversions::vector7ToKDLFrame(this->tool_to_ee_tr_prop, this->tmp_frame);
+
+	this->kine = new LWR4Kinematics(this->tmp_frame);
 
 	// construct the teleop object
 	this->to = new teleopC (
@@ -224,10 +239,10 @@ bool Teleop::configureHook(){
 
 	if(this->motionOn) cout<< "Motion is ON." << endl;
 	else cout<< "Motion is Off." << endl;
-	cout << "Tool length is:" << this->tool_zlength_prop << endl;
 	cout << "Motion mode is: "<< this->motion_mode << "\n" <<endl;
-	std::cout << "Teleop configured!" <<std::endl;
+	cout << "Tool to end-effector translation is: x= " << this->tool_to_ee_tr_prop[0] <<" y= " << this->tool_to_ee_tr_prop[1]<<" z= " << this->tool_to_ee_tr_prop[2] << endl;
 
+	std::cout << "Teleop configured!" <<std::endl;
 	return true;
 }
 
@@ -602,6 +617,7 @@ void Teleop::cleanupHook() {
 	std::cout << "Teleop cleaning up !" <<std::endl;
 }
 
+
 void Teleop::jointStateMotionObserver(std::vector<double> q_curr, std::vector<double> q_dest, std::vector<double>& q_cmd ){
 
 	std::vector<double> temp_vec(7, 0.0);
@@ -615,10 +631,12 @@ void Teleop::jointStateMotionObserver(std::vector<double> q_curr, std::vector<do
 		double max_diff = *( max_element(temp_vec.begin() , temp_vec.end()) );
 
 		// if the largest asked displacement is bigger than 3 degrees but not too big, interpolate.
-		if (max_diff> 3*M_PI/180 && max_diff< 10*M_PI/180){
+		if (max_diff> 3*M_PI/180 && max_diff <= 10*M_PI/180){
 			cout << max_diff*180/M_PI << endl;
 			this->teleop_interpolate_done = false;
 		}
+		if(max_diff> 10*M_PI/180)
+			log(RTT::Error) << "jointStateMotionObserver: Large joint displacement asked. Max is: " <<max_diff <<" Rad." <<  endlog();
 	}
 	// no else. Check again
 	if(!this->teleop_interpolate_done){
@@ -709,11 +727,6 @@ double Teleop::calculateBestArmAngle(){
 
 
 
-/*
-/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
-////// ************************************** Teleop FUNCTIONS *************************************************\\\\\\\\\
-/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
- */
 ///------------------------------------------------------------------------------------------------------------------------------------
 bool Teleop::startMotion() {
 	Logger::In in(this->getName());
@@ -735,7 +748,9 @@ bool Teleop::startMotion() {
 }
 
 
-
+//--------------------------------------------------------------------------------------------------
+//Teleop updateCam2SlavePose
+//--------------------------------------------------------------------------------------------------
 
 void Teleop::updateCam2SlavePose(){
 
@@ -770,7 +785,10 @@ void Teleop::updateCam2SlavePose(){
 }
 
 
-///------------------------------------------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+//Teleop changeMotionMode
+//--------------------------------------------------------------------------------------------------
 bool Teleop::changeMotionMode(const int mode) {
 	Logger::In in(this->getName());
 
@@ -792,7 +810,10 @@ bool Teleop::changeMotionMode(const int mode) {
 	return true;
 }
 
-///------------------------------------------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+//Teleop stopMotion
+//--------------------------------------------------------------------------------------------------
 bool Teleop::stopMotion() {
 
 	// Action to be performed to stop the movement;
@@ -824,7 +845,9 @@ bool Teleop::stopMotion() {
 
 
 
-///-------------------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
+//Teleop setPTPCartDestination
+//--------------------------------------------------------------------------------------------------
 bool Teleop::setPTPCartDestination(const std::vector<double>& vars) {
 	log(RTT::Debug) << "Setting Cartesian destination" << endlog();
 	if (this->destination_reached) {
@@ -861,7 +884,10 @@ bool Teleop::setPTPCartDestination(const std::vector<double>& vars) {
 }
 
 
-///------------------------------------------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+//Teleop setPTPJointDestination
+//--------------------------------------------------------------------------------------------------
 bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 	Logger::In in(this->getName());
 	log(RTT::Debug) << "Setting joints destination" << endlog();
@@ -902,7 +928,9 @@ bool Teleop::setPTPJointDestination(std::vector<double> vars) {
 }
 
 
-
+//--------------------------------------------------------------------------------------------------
+//Teleop initializeCart6dTraj
+//--------------------------------------------------------------------------------------------------
 void Teleop::initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::Frame &  slv_frame_curr, ptpInterpolator * _cart_interpolator){
 
 	std::vector<double> slv_cart_6d_dest = std::vector<double>(6,0.0);
@@ -927,7 +955,9 @@ void Teleop::initializeCart6dTraj(const KDL::Frame & slv_frame_dest, const KDL::
 }
 
 
-///------------------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
+//Teleop initializeCart6dTraj
+//--------------------------------------------------------------------------------------------------
 void Teleop::switchForceFeedback(bool input){
 	Logger::In in(this->getName());
 	if(this->to->force_feedback_on == input){
@@ -940,17 +970,7 @@ void Teleop::switchForceFeedback(bool input){
 
 }
 
-///------------------------------------------------------------------------------------------------------------------------------------
-void Teleop::forceFilterSwitch() {
-	cout<< "Switching force filter from:" << this->force_filter_on << " to: " << !this->force_filter_on << endl;
-	this->force_filter_on = !this->force_filter_on;
-}
 
-
-///------------------------------------------------------------------------------------------------------------------------------------
-bool Teleop::goHome() {
-	return(this->setPTPJointDestination(this->slv_jnt_home));
-}
 
 ///------------------------------------------------------------------------------------------------------------------------------------
 void Teleop::wtf(){
@@ -959,7 +979,7 @@ void Teleop::wtf(){
 	else 				cout << "Motion is Off." << endl;
 	cout << "Motion mode is: "<< this->motion_mode << endl;
 	cout << "		Note: 0 = Idle, 1=PTP in joint, 2=PTP in Cartesian, 3=Tracking, 4=Tele-operation" << endl;
-	cout << "Tool length is:" << this->tool_zlength_prop << endl;
+	cout << "Tool to end-effector translation is: x= " << this->tool_to_ee_tr_prop[0] <<" y= " << this->tool_to_ee_tr_prop[1]<<" z= " << this->tool_to_ee_tr_prop[2] << endl;
 	this->to->printParameters();
 
 	cout << "Current config param is                 : " << this->robot_config << endl;

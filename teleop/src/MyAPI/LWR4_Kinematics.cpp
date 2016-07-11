@@ -6,9 +6,13 @@ using namespace std;
 //------------------------------------------------------------------------------
 // Constructor hard-coded for LWR4 DH
 //------------------------------------------------------------------------------
-LWR4Kinematics::LWR4Kinematics(double _ztool){
+LWR4Kinematics::LWR4Kinematics(KDL::Frame _tool_to_ee){
 
-	ztool = _ztool;
+	tr_tool_to_ee = _tool_to_ee;
+
+	// just to prevent inverting at the run time
+	tr_ee_to_tool = _tool_to_ee.Inverse();
+
 	jlim1 = 2.97; // rads = 170 degrees for joints: 1 3 5 7
 	jlim2 = 2.09; // rads = 120 degrees for joints: 2 4 6
 
@@ -21,7 +25,7 @@ LWR4Kinematics::LWR4Kinematics(double _ztool){
 	dbs=0.31;
 	dse=0.4;
 	dew=0.39;
-	dwt=0.078+ztool;
+	dwt=0.078;
 
 	//	q_ik = std::vector<double>(7, 0.0);
 
@@ -32,17 +36,17 @@ LWR4Kinematics::LWR4Kinematics(double _ztool){
 
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // 					LWR4Kinematics METHODS
-//------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // PUBLIC IK METHOD
-//------------------------------------------------------------------------------
-bool LWR4Kinematics::ik(const KDL::Frame _T, const unsigned int _config, double _psi,
+//-----------------------------------------------------------------------------------------------
+bool LWR4Kinematics::ik(const KDL::Frame _T_tool_to_base, const unsigned int _config, double _psi,
 		std::vector<double>& _theta){
 
-	// save the inputs
-	T = _T;
+	// finding the end-effector to base frame
+	T_ee_to_base = _T_tool_to_base * tr_ee_to_tool;
 
 	if(this->ikPart1(_theta)){
 
@@ -60,16 +64,17 @@ bool LWR4Kinematics::ik(const KDL::Frame _T, const unsigned int _config, double 
 
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // IK PART1
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 bool LWR4Kinematics::ikPart1(std::vector<double>& q){
 
-	tf::Vector3 	X07d( tf::Vector3(T.p.data[0],T.p.data[1],T.p.data[2]) );
+	tf::Vector3 	X07d( tf::Vector3(T_ee_to_base.p.data[0],T_ee_to_base.p.data[1],T_ee_to_base.p.data[2]) );
 
-	tf::Matrix3x3 	R07d( tf::Matrix3x3(T.M.data[0],T.M.data[1],T.M.data[2],
-			T.M.data[3],T.M.data[4],T.M.data[5],
-			T.M.data[6],T.M.data[7],T.M.data[8]) );
+	tf::Matrix3x3 	R07d( tf::Matrix3x3(
+			T_ee_to_base.M.data[0], T_ee_to_base.M.data[1], T_ee_to_base.M.data[2],
+			T_ee_to_base.M.data[3], T_ee_to_base.M.data[4], T_ee_to_base.M.data[5],
+			T_ee_to_base.M.data[6], T_ee_to_base.M.data[7], T_ee_to_base.M.data[8]) );
 
 	tf::Vector3 	X0sw( tf::Vector3(0.0,0.0,0.0)) ;
 
@@ -138,9 +143,9 @@ bool LWR4Kinematics::ikPart1(std::vector<double>& q){
 
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // IK PART 2
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 void LWR4Kinematics::ikPart2(const unsigned int config, const double psi,
 		std::vector<double>& q){
 
@@ -193,9 +198,9 @@ void LWR4Kinematics::ikPart2(const unsigned int config, const double psi,
 
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // validJointsForCurrentArc
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 bool LWR4Kinematics::validJointsForCurrentArc(const KDL::Frame T, const unsigned int _config, double psi_curr,
 		std::vector<double> &psi_arc){
 
@@ -265,9 +270,9 @@ bool LWR4Kinematics::validJointsForCurrentArc(const KDL::Frame T, const unsigned
 
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // validJointsForPsiVector
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 bool LWR4Kinematics::validJointsForPsiVector(const KDL::Frame T, const unsigned int _config,
 		const std::vector<double> _psi,	std::vector<std::vector<double> >& valid_joints,
 		std::vector<double> & valid_psis) {
@@ -301,14 +306,16 @@ bool LWR4Kinematics::validJointsForPsiVector(const KDL::Frame T, const unsigned 
 
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // FK_ALL
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 void LWR4Kinematics::fk_all(const std::vector<double> joint_positions, unsigned int & config, double & arm_angle,  std::vector<KDL::Frame> &joint_frames) {
 
 	// I modified the implementation of Mirko Kunze here which is written in a generic
 	// way.
 
+	//-----------------------------------------------------------------------------------------------
+	// Constructing the DH parameters vector
 	std::vector<std::vector<double> > dh;
 
 	dh.clear();
@@ -356,11 +363,13 @@ void LWR4Kinematics::fk_all(const std::vector<double> joint_positions, unsigned 
 	dh.push_back(singlelink);
 	singlelink.clear();
 
+	//-----------------------------------------------------------------------------------------------
+	// Find the configuration parameter
 	config_fk = ((int) (joint_positions.at(1) < 0)) + (2 * ((int) (joint_positions.at(3) < 0))) + (4 * ((int) (joint_positions.at(5) < 0)));
 	config = config_fk;
 
-	//	std::vector<KDL::Frame> joint_frames(n_joints + 1, KDL::Frame::Identity());
-
+	//-----------------------------------------------------------------------------------------------
+	// Calculate link transformations
 	for (unsigned int linkIter = 1; linkIter < (n_joints + 1); linkIter++) {
 
 		KDL::Vector linkTmpVec = KDL::Vector::Zero();
@@ -385,6 +394,11 @@ void LWR4Kinematics::fk_all(const std::vector<double> joint_positions, unsigned 
 		joint_frames.at(linkIter) = joint_frames.at(linkIter - 1) * joint_frames.at(linkIter);
 	}
 
+	// taking into consideration the tool transformation
+	joint_frames.at(n_joints) = joint_frames.at(n_joints) * tr_tool_to_ee;
+
+	//-----------------------------------------------------------------------------------------------
+	// finding the arm angle
 	KDL::Vector xs = joint_frames.at(1).p;
 	KDL::Vector xe = joint_frames.at(3).p;
 	KDL::Vector xw = joint_frames.at(5).p;
@@ -400,15 +414,14 @@ void LWR4Kinematics::fk_all(const std::vector<double> joint_positions, unsigned 
 	// Nima: added negative sign so that the rotation of arm_angle is around the vector from shoulder to wrist.
 	arm_angle = -((double) atan2(dot(xse, usin), dot(xse, ucos)));
 
-
 	///				TOTAL TIME MEASURED FROM OUTSIDE ~= 9 uS
 
 }
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // FK
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 void LWR4Kinematics::fk(const std::vector<double> joint_positions, unsigned int & config, double & arm_angle,  KDL::Frame &cartesian_matrix) {
 
 	std::vector<KDL::Frame> joint_frames(n_joints + 1, KDL::Frame::Identity());
@@ -420,10 +433,10 @@ void LWR4Kinematics::fk(const std::vector<double> joint_positions, unsigned int 
 }
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // JACOBIAN
-//------------------------------------------------------------------------------
-void LWR4Kinematics::jacobian( const std::vector<KDL::Frame> joint_frames, KDL::Jacobian & jac){
+//-----------------------------------------------------------------------------------------------
+void LWR4Kinematics::jacobian( const std::vector<KDL::Frame> & joint_frames, KDL::Jacobian & jac){
 
 	//JACOBIAN
 
@@ -447,9 +460,9 @@ void LWR4Kinematics::jacobian( const std::vector<KDL::Frame> joint_frames, KDL::
 }
 
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // Manipulability
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 void LWR4Kinematics::getManipulabilityIdx(const KDL::Jacobian jac, unsigned int dof_param, double & manp_idx){
 
 
@@ -479,9 +492,9 @@ void LWR4Kinematics::getManipulabilityIdx(const KDL::Jacobian jac, unsigned int 
 	manp_idx = std::sqrt(jj.determinant());
 }
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // MOD ANGLE
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 void LWR4Kinematics::modAngle(double &angle){
 
 	while (angle > M_PI) {
