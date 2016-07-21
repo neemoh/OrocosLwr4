@@ -32,7 +32,11 @@ class taskPerformanceEval : public RTT::TaskContext{
 
     void endAcquisition();
 
-    bool isCloseToSigmaWorkSpaceBoundary(geometry_msgs::Pose _pose);
+    bool isCloseToSigmaWorkSpaceBoundary(const KDL::Vector&_position);
+
+    template <typename type> void writeTimeStamp(double seconds, type & b);
+
+
   private:
 
     bool task_running;
@@ -49,10 +53,13 @@ class taskPerformanceEval : public RTT::TaskContext{
 	// clutching metric
 	unsigned long int num_clutchings;;
 
-	//workspace metric
+	//Master metrics
 	unsigned long int ws_total_samples;
 	unsigned long int ws_boundary_samples;
 	KDL::Frame sigma_workspace_tr;
+	double mstr_tot_displacement;
+	KDL::Vector mstr_position;
+	KDL::Vector mstr_position_last;
 
 	// time related variables
 	RTT::os::TimeService::ticks ticks_from_acq_start;
@@ -89,6 +96,8 @@ class taskPerformanceEval : public RTT::TaskContext{
 	// vision node
 	RTT::OutputPort<geometry_msgs::Pose> 		port_out_curr_pose_in_slvrf_downsmpl;
 	RTT::OutputPort<geometry_msgs::Pose> 		port_out_des_pose_in_slvrf_downsmpl;
+	//Down sampled cutting pose for evaluation
+	RTT::OutputPort<geometry_msgs::PoseStamped> 		port_out_cutting_pose_in_taskrf_downsmpl;
 	// Down sampled velocity for performance evaluation
 	RTT::OutputPort<geometry_msgs::Twist> 		port_out_twist_in_slv_downsmpl;
 	// number of clutches for evaluation

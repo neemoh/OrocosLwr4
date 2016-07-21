@@ -14,8 +14,9 @@ taskPerformanceEval::taskPerformanceEval(std::string const& name) : TaskContext(
 	this->addPort("inputClutch", 					this->port_inp_clutch);
 	this->addPort("inputACForce", 					this->port_inp_wrench);
 
-	this->addPort("outputCurrPoseInSlvRfDownSmpl", this->port_out_curr_pose_in_slvrf_downsmpl);
-	this->addPort("outputDestPoseInSlvRfDownSmpl", this->port_out_des_pose_in_slvrf_downsmpl);
+	this->addPort("outputCurrPoseInSlvRfDownSmpl", 	this->port_out_curr_pose_in_slvrf_downsmpl);
+	this->addPort("outputDestPoseInSlvRfDownSmpl", 	this->port_out_des_pose_in_slvrf_downsmpl);
+	this->addPort("outputCuttingPoseInTaskRfDownSmpl", this->port_out_cutting_pose_in_taskrf_downsmpl);
 //	this->addPort("outputTwist", this->port_out_twist_in_slv_downsmpl);
 	this->addPort("outputClutchStamped", this->port_out_clutch_stamped);
 	this->addPort("outputMasterDownSmplStamped", this->port_out_mstr_pose_downsmpl_stamped);
@@ -25,7 +26,7 @@ taskPerformanceEval::taskPerformanceEval(std::string const& name) : TaskContext(
 
 
 	// initialize
-	this->vision_downsmpl_counter	=
+	this->vision_downsmpl_counter		=
 	this->recording_downsmpl_counter 	= 0;
 
 	this->addProperty("visionDownsmplRatio", 	this->vision_downsmpl_ratio_param);
@@ -40,12 +41,12 @@ taskPerformanceEval::taskPerformanceEval(std::string const& name) : TaskContext(
 	this->task_running = false;
 
 	//Initializing variables
-	this->ws_total_samples = 0;
-	this->ws_boundary_samples = 0;
-	this->num_clutchings = 0;
-
-	this->elapsed_time = 0.0;
-	this->ticks_from_acq_start = 0;
+	this->ws_total_samples 		= 0;
+	this->ws_boundary_samples 	= 0;
+	this->num_clutchings 		= 0;
+	this->mstr_tot_displacement = 0.0;
+	this->elapsed_time 			= 0.0;
+	this->ticks_from_acq_start 	= 0;
 
 	sigma_workspace_tr.M = KDL::Rotation::RotZ(M_PI/4);
 	sigma_workspace_tr.p = KDL::Vector(0.038, 0.0, -0.006);
@@ -59,6 +60,7 @@ bool taskPerformanceEval::configureHook(){
 	// initializing the output ports
 	this->port_out_curr_pose_in_slvrf_downsmpl.setDataSample(this->pose_msg);
 	this->port_out_des_pose_in_slvrf_downsmpl.setDataSample(this->pose_msg);
+	this->port_out_cutting_pose_in_taskrf_downsmpl.setDataSample(this->pose_stamped_msg);
 	this->port_out_mstr_pose_downsmpl_stamped.setDataSample(this->pose_stamped_msg);
 	this->port_out_clutch_stamped.setDataSample(this->point_stamped_msg);
 	this->port_out_metrics1_downsmpl.setDataSample(this->vec3_stamped_msg);
@@ -102,7 +104,6 @@ void taskPerformanceEval::updateHook(){
 		this->elapsed_time = RTT::os::TimeService::Instance()->secondsSince(this->ticks_from_acq_start);
 		this->recording_downsmpl_counter++;
 
-
 		if(this->recording_downsmpl_counter == this->recording_downsmpl_ratio_param){
 			this->recording_downsmpl_counter = 0;
 
@@ -111,7 +112,8 @@ void taskPerformanceEval::updateHook(){
 			// sophisticated check will be needed if the task is not on a board
 			if((this->des_pose_in_taskrf.p[2] - this->curr_pose_in_taskrf.p[2]) > -0.005){
 
-
+				//---------------------------------------------------------------------------------------------
+				//			METRICS 1
 				//---------------------------------------------------------------------------------------------
 				// calculate the error as the distance from current position to the desired one
 				double error = (this->des_pose_in_taskrf.p - this->curr_pose_in_taskrf.p).Norm();
@@ -121,7 +123,7 @@ void taskPerformanceEval::updateHook(){
 				if(this->port_inp_twist_in_slv.read(this->twist_msg) == RTT::NewData)
 					tf::TwistMsgToKDL(this->twist_msg, this->twist_in_slave);
 
-				// find it's norm
+				// find its norm
 				double vel = this->twist_in_slave.vel.Norm();
 
 				//---------------------------------------------------------------------------------------------
@@ -132,34 +134,57 @@ void taskPerformanceEval::updateHook(){
 				double force = kdl_vec.Norm();
 
 				//---------------------------------------------------------------------------------------------
-				// saving in the message and write on the port
-//				this->vec3_stamped_msg.header.stamp.Time(this->elapsed_time);
+				// saving in a message and write on the port
+				this->writeTimeStamp(this->elapsed_time, this->vec3_stamped_msg);
 				this->vec3_stamped_msg.vector.x = error;
 				this->vec3_stamped_msg.vector.y = vel;
 				this->vec3_stamped_msg.vector.z = force;
 
 				this->port_out_metrics1_downsmpl.write(this->vec3_stamped_msg);
+
+
+
+				//---------------------------------------------------------------------------------------------
+				// Writing the cutting pose on the port
+				tf::PoseKDLToMsg(this->curr_pose_in_taskrf,this->pose_stamped_msg.pose);
+				this->writeTimeStamp(this->elapsed_time, this->pose_stamped_msg);
+				this->port_out_cutting_pose_in_taskrf_downsmpl.write(this->pose_stamped_msg);
+
 			}// end if penetrating
 
+
 			//---------------------------------------------------------------------------------------------
-			// Workspace check.
-			// here we want to check how often the user gets close to the boundaries of the Sigma's workspace
+			// 				MASTER METRICS
+			//---------------------------------------------------------------------------------------------
 			if(this->port_inp_master_pose.read(this->pose_msg)!=RTT::NoData){
+
+				this->mstr_position_last = this->mstr_position;
+				this->mstr_position = KDL::Vector(pose_msg.position.x, pose_msg.position.y, pose_msg.position.z);
+
+				//---------------------------------------------------------------------------------------------
+				// Workspace check.
+				// here we want to check how often the user gets close to the boundaries of the Sigma's workspace
 				this->ws_total_samples++;
-				if(this->isCloseToSigmaWorkSpaceBoundary(this->pose_msg)){
+				if(this->isCloseToSigmaWorkSpaceBoundary(this->mstr_position)){
 					this->ws_boundary_samples++;
 				}
+
+				//---------------------------------------------------------------------------------------------
+				// Calculate total master displacement
+				// Simply find the norm of the Cartesian displacement from the last sample and
+				this->mstr_tot_displacement += (this->mstr_position - this->mstr_position_last).Norm();
+
 			}
 
 			//---------------------------------------------------------------------------------------------
 			// sending the down-sampled and stamped master position
 			if(this->port_inp_master_pose.read(this->pose_msg)!= RTT::NoData){
 				this->pose_stamped_msg.pose = this->pose_msg;
-//				this->pose_stamped_msg.header.stamp.Time(this->elapsed_time);
+				this->writeTimeStamp(this->elapsed_time, this->pose_stamped_msg);
 				this->port_out_mstr_pose_downsmpl_stamped.write(this->pose_stamped_msg);
 			}
 
-		}// end if down-sampling
+		}// --------------------------- end if for down-sampling
 
 		// read the clutch port. If new data available stamp it and send it.
 		if(this->port_inp_clutch.read(this->int8_msg) == RTT::NewData){
@@ -170,7 +195,7 @@ void taskPerformanceEval::updateHook(){
 
 			// couldn't find any good stamped message type that's why I'm using pointStamped!!
 			this->point_stamped_msg.point.x = this->int8_msg.data;
-//			this->point_stamped_msg.header.stamp.Time(this->elapsed_time);
+			//			this->point_stamped_msg.header.stamp.Time(this->elapsed_time);
 			this->port_out_clutch_stamped.write(this->point_stamped_msg);
 		}
 	}
@@ -249,6 +274,7 @@ void taskPerformanceEval::downsampleAndSendCurrAndDesPoses(const KDL::Frame & _c
 		this->vision_downsmpl_counter = 0;
 
 		// write the down-sampled current pose
+
 		this->port_out_curr_pose_in_slvrf_downsmpl.write(this->curr_pose_msg_in_slvrf);
 
 		// write the down-sampled desired pose
@@ -257,8 +283,6 @@ void taskPerformanceEval::downsampleAndSendCurrAndDesPoses(const KDL::Frame & _c
 
 
 }
-
-
 
 
 
@@ -279,7 +303,16 @@ void taskPerformanceEval::startAcquisition(){
 	this->ws_total_samples = 0;
 	this->ws_boundary_samples = 0;
 
+	// reset other metrics
 	this->num_clutchings = 0;
+	this->mstr_tot_displacement = 0.0;
+
+	// Initialize mstr_position_last
+	if(this->port_inp_master_pose.read(this->pose_msg)!=RTT::NoData){
+		this->mstr_position_last = KDL::Vector(pose_msg.position.x, pose_msg.position.y, pose_msg.position.z);
+	}
+	else
+		RTT::log(RTT::Error) << "No pose data from the master ." << RTT::endlog();
 
 }
 
@@ -295,11 +328,18 @@ void taskPerformanceEval::endAcquisition(){
 	this->port_out_events.write(this->char_msg);
 
 	// saving the accumulative metrics the message and write on the port
-//	this->vec3_stamped_msg.header.stamp.Time(this->elapsed_time);
+	double elapsed_time = RTT::os::TimeService::Instance()->secondsSince(this->ticks_from_acq_start);
+	this->writeTimeStamp(elapsed_time, this->vec3_stamped_msg);
+
 	// find the ratio of outside of ws samples to total number of samples
 	this->vec3_stamped_msg.vector.x = double(this->ws_boundary_samples) / double(this->ws_total_samples);
-//	this->vec3_stamped_msg.vector.y = this->mstr_tot_displacement;
-	this->vec3_stamped_msg.vector.z = this->num_clutchings;
+	// total displacement per minute
+//	this->vec3_stamped_msg.vector.y = this->mstr_tot_displacement / (elapsed_time/60);
+	this->vec3_stamped_msg.vector.y = this->mstr_tot_displacement;
+	// number of clutches per minute
+//	this->vec3_stamped_msg.vector.z = double(this->num_clutchings)/ (elapsed_time/60);
+	this->vec3_stamped_msg.vector.z = double(this->num_clutchings);
+	// write on port
 	this->port_out_metrics2_downsmpl.write(this->vec3_stamped_msg);
 
 }
@@ -308,22 +348,27 @@ void taskPerformanceEval::endAcquisition(){
 //---------------------------------------------------------------------------------------------
 // closeToSigmaWorkSpaceBoundary
 //---------------------------------------------------------------------------------------------
-bool taskPerformanceEval::isCloseToSigmaWorkSpaceBoundary(geometry_msgs::Pose _pose){
-
-	KDL::Vector position = KDL::Vector(_pose.position.x, _pose.position.y, _pose.position.z);
-	//	KDL::Vector position = KDL::Vector(1, 2, 3);
+bool taskPerformanceEval::isCloseToSigmaWorkSpaceBoundary(const KDL::Vector& _position){
 
 	// This transformation makes the comparison easier by aligning the workspace with the
 	// coordinate frame axes and shifting it to the center,
-	position = this->sigma_workspace_tr * position;
-	//	cout << position[0] << "  "<< position[1] << "  "<< position[2] << endl;
+	KDL::Vector position_transformed = this->sigma_workspace_tr * _position;
+
 	// The workspace can be approximated by a half sphere with radius 0.11m.
-	if (position[0]>0 && position.Norm() < 0.11)
+	if (position_transformed[0]>0 && position_transformed.Norm() < 0.11)
 		return false;
 	else
 		return true;
 
+}
 
+
+template <typename type> void taskPerformanceEval::writeTimeStamp(double seconds, type & b){
+
+	double fractpart, intpart;
+	fractpart = modf (seconds , &intpart);
+	b.header.stamp.sec = uint32_t(intpart);
+	b.header.stamp.nsec = uint32_t(fractpart*1000000000);
 
 }
 /*

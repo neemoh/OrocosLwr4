@@ -53,8 +53,19 @@ if(RTNET_INCLUDE_DIR AND ${OROCOS_TARGET} STREQUAL "xenomai" )
   orocos_component(acForceGen src/acForceGen-component.hpp src/acForceGen-component.cpp) # ...you may add multiple source files
   orocos_add_compile_flags(acForceGen ${XENO_CFLAGS})
   orocos_add_link_flags(acForceGen ${XENO_LDFLAGS})
+
+  orocos_component(acGeomGen src/acGeomGen-component.hpp src/acGeomGen-component.cpp) 
+  orocos_add_compile_flags(acGeomGen ${XENO_CFLAGS})
+  orocos_add_link_flags(acGeomGen ${XENO_LDFLAGS})
+
+  orocos_component(taskPerformanceEval src/taskPerformanceEval-component.hpp src/taskPerformanceEval-component.cpp) 
+  orocos_add_compile_flags(taskPerformanceEval ${XENO_CFLAGS})
+  orocos_add_link_flags(taskPerformanceEval ${XENO_LDFLAGS})
+
 else()
   orocos_component(acForceGen src/acForceGen-component.hpp src/acForceGen-component.cpp) # ...you may add multiple source files
+  orocos_component(acGeomGen src/acGeomGen-component.hpp src/acGeomGen-component.cpp) 
+  orocos_component(taskPerformanceEval src/taskPerformanceEval-component.hpp src/taskPerformanceEval-component.cpp) 
 endif()
 
 add_library(acMethods SHARED src/acMethods.cpp src/acMethods.hpp)
