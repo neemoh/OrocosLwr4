@@ -15,6 +15,7 @@ lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(na
 	this->addPort("outputCartPoseFK", this->cart_FK_port).doc("Readings of the pose from Sigma");
 	this->addPort("outputCartTwist", this->port_cart_twist).doc("Readings of the pose from Sigma");
 	this->addPort("outputMasterToSlaveTr", this->master_to_slave_rot_port).doc("Readings of the pose from Sigma");
+	this->addPort("outputMasterWorkspaceAlert", this->port_out_mstr_ws_alert).doc("Readings of the pose from Sigma");
 
 	this->addEventPort("inputJointCurrent", this->joint_msrd_port).doc("Readings of the pose from PhanomOmni");
 	this->addPort("inputMasterPose", this->master_msrd_pose_port).doc("Output of the pose to Sigma");
@@ -90,6 +91,7 @@ lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(na
 
 	this->new_cart_dest 			= false;
 	this->force_filter_on			= false;
+	this->mstr_workspace_alert 		= false;
 
 	std::cout << "lwr4KineController constructed!" <<std::endl;
 }
@@ -194,6 +196,7 @@ bool lwr4KineController::configureHook(){
 	this->port_cart_twist.setDataSample(this->tmp_twist);
 	this->force_to_master_port.setDataSample(this->mstr_wrench_cmd);
 	this->cart_FK_port.setDataSample(this->tmp_pose_msg);
+	this->port_out_mstr_ws_alert.setDataSample(this->bool_msg);
 
 	geometry_msgs::Quaternion temp_quat;
 	this->master_to_slave_rot_port.setDataSample(temp_quat);
@@ -236,7 +239,6 @@ bool lwr4KineController::configureHook(){
 			this->fs_to_ee_rotation_prop,
 			this->mstr_to_tool_orient_prop,
 			this->mstr_to_cam_rotation_prop);
-
 
 	if(this->motionOn) cout<< "Motion is ON." << endl;
 	else cout<< "Motion is Off." << endl;
@@ -460,6 +462,9 @@ void lwr4KineController::updateHook(){
 					tf::PoseKDLToMsg(this->slv_frame_cmd, this->tmp_pose_msg);
 					this->cart_command_port.write(this->tmp_pose_msg);
 
+					// checking if the user is close to Sigma's boundaries to activate the workspace helper method.
+					this->mstr_workspace_alert = this->to->isCloseToSigmaWorkSpaceBoundary(this->to->mstr_frame_curr.p);
+
 					//--------------------------------------------------------------------------------------------------
 					// Force
 					//--------------------------------------------------------------------------------------------------
@@ -482,6 +487,13 @@ void lwr4KineController::updateHook(){
 			else { //If the clutch is released
 				this->to->clutch_first_time = true;
 				this->destination_reached = true;
+				// if the workspace alarm was set, tell Sigma to go to it's center
+				if(this->mstr_workspace_alert){
+					this->bool_msg.data = true;
+					this->port_out_mstr_ws_alert.write(this->bool_msg);
+					this->mstr_workspace_alert = false;
+
+				}
 			}
 			break;
 
@@ -1352,7 +1364,12 @@ teleop::teleop(double _period,
 
 	// slv_initial_orientation is the zero orientation zero of the slave. it is initialized as the tool directing
 	// downwards. The RotZ is to put joint 7 away from limits.
-	slv_initial_orientation = KDL::Rotation::RotX(M_PI) * KDL::Rotation::RotZ(-M_PI/2);
+	//	slv_initial_orientation = KDL::Rotation::RotX(M_PI) * KDL::Rotation::RotZ(-M_PI/2);
+
+	// setting up the sigma_workspace_tr that is used in Sigma workspace check
+	sigma_workspace_tr.M = KDL::Rotation::RotZ(M_PI/4);
+	sigma_workspace_tr.p = KDL::Vector(0.038, 0.0, -0.006);
+
 
 	first_engagement_counter_rpy = 0;
 	first_engagement_counter_pos = 0;
@@ -1376,6 +1393,7 @@ teleop::teleop(double _period,
 void teleop::initializeOrientation(lwr4KineController * tel, ptpInterpolator * cart_interpolator){
 
 	if(reorientation_first_run){
+		cout << "in reorientation_first_run" << endl;
 
 		KDL::Frame desired_frame;
 		desired_frame.M = slv_initial_orientation;
@@ -1404,10 +1422,10 @@ void teleop::initializeOrientation(lwr4KineController * tel, ptpInterpolator * c
 
 	if(reorientation_done){
 
-		// infrom the user
-		log(Warning) << "Reorientation is finished. Now you can tele operate." << endlog();
+		// Inform the user
+		log(Warning) << "Re-orientation is finished. Now you can tele-operate." << endlog();
 
-		// to make sure nothig crazy happens once the reorientation_done flag is changed
+		// to make sure nothing crazy happens once the reorientation_done flag is changed
 		tel->slv_frame_cmd = tel->slv_frame_curr;
 	}
 }
@@ -1424,13 +1442,12 @@ KDL::Frame teleop::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometr
 	//--------------------------------------------------------------------------------------------------
 	// first clutch stuff
 	if(clutch_first_time){
-
 		// Saving the pose of the master and slave when the clutch is engaged for the first time for incremental pos
 		mstr_frame_init = mstr_frame_curr;
 		slv_frame_init = _slv_frame_curr;
 
 		// Initial filtering duration
-		first_engagement_counter_rpy = 1 * 1/dt_param;// seconds first engagement integration;
+		first_engagement_counter_rpy = 2 * 1/dt_param;// seconds first engagement integration;
 		first_engagement_counter_pos = 0.5 * 1/dt_param;// seconds first engagement integration;
 
 		// Setting the initial value for the averaging of the orientation as that of the slave taken in
@@ -1456,6 +1473,7 @@ KDL::Frame teleop::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometr
 		mstr_deltapos_avg = std::vector<double>(3,0.0);
 
 		clutch_first_time = false;
+
 	}
 
 	//--------------------------------------------------------------------------------------------------
@@ -1473,17 +1491,17 @@ KDL::Frame teleop::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometr
 	std::vector<double>	mstr_curr_rpy= std::vector<double>(3,0.0);
 	this->mstr_frame_curr.M.GetRPY(mstr_curr_rpy[0], mstr_curr_rpy[1], mstr_curr_rpy[2]);
 
-	//	cout << "mstr_rpy_avg " << mstr_rpy_avg << endl;
-	//	cout << "mstr_curr_rpy " << mstr_curr_rpy << endl;
 
 	for(int i= 0; i<3 ; i++){
 		mstr_rpy_avg[i] -= mstr_rpy_avg[i] / rpy_avg_n_variable;
 		mstr_rpy_avg[i] += mstr_curr_rpy[i] / rpy_avg_n_variable;
 	}
+
 	//	if(int(this->rpy_avg_n_variable) % 20 ==0)	cout << "rpy_avg_n_variable " << rpy_avg_n_variable << endl;
 
-	KDL::Frame mstr_avg_frame, slv_avg_frame;
-	mstr_avg_frame.M = KDL::Rotation::RPY(mstr_rpy_avg[0], mstr_rpy_avg[1], mstr_rpy_avg[2]);
+	KDL::Frame mstr_delta_avg_frame_in_mstrrf, mstr_delta_avg_frame_in_slvrf;
+	mstr_delta_avg_frame_in_mstrrf.M = KDL::Rotation::RPY(mstr_rpy_avg[0], mstr_rpy_avg[1], mstr_rpy_avg[2]);
+
 
 	// Averaging the position displacement
 	if(first_engagement_counter_pos >= pos_avg_n){
@@ -1493,25 +1511,43 @@ KDL::Frame teleop::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometr
 	for(int i= 0; i<3 ; i++){
 		mstr_deltapos_avg[i] -= mstr_deltapos_avg[i] / pos_avg_n_variable;
 		mstr_deltapos_avg[i] += (mstr_frame_curr.p[i] - mstr_frame_init.p[i]) / pos_avg_n_variable;
-		mstr_avg_frame.p[i] = mstr_deltapos_avg[i];
+		mstr_delta_avg_frame_in_mstrrf.p[i] = mstr_deltapos_avg[i];
 	}
 	//	if(int(this->pos_avg_n_variable) % 20 ==0)	cout << "pos_avg_n_variable " << pos_avg_n_variable << endl;
 
-
-	mstrToSlave(mstr_avg_frame, slv_avg_frame);
+	mstrToSlave(mstr_delta_avg_frame_in_mstrrf, mstr_delta_avg_frame_in_slvrf);
 
 	//------------------------ Position is incremental
-	if(teleop_pos_coupled) slv_frame_dest.p = slv_frame_init.p + slv_avg_frame.p;
+	if(teleop_pos_coupled) slv_frame_dest.p = slv_frame_init.p + transl_scale * mstr_delta_avg_frame_in_slvrf.p;
 	else 				   slv_frame_dest.p = slv_frame_init.p;
 
 	//------------------------ Orientation is absolute
-	if(teleop_ori_coupled) slv_frame_dest.M	= slv_avg_frame.M;
+	if(teleop_ori_coupled) slv_frame_dest.M	= mstr_delta_avg_frame_in_slvrf.M;
 	else	  			   slv_frame_dest.M	= slv_frame_init.M;
 
 	return slv_frame_dest;
 
 }
 
+//--------------------------------------------------------------------------------------------------
+// calculateDesiredSlavePose
+//--------------------------------------------------------------------------------------------------
+//KDL::Frame teleop::getLockedMstrOrientationInMstrRf(KDL::Frame _slv_frame_curr, geometry_msgs::Pose master_msrd_pose){
+//	KDL::Rotation temp_slv_rot;
+//	if(available_cam_pose){
+//		temp_slv_rot =
+//				mstr_to_cam_rotation.Inverse() * cam_to_slv_rotation *
+//				_slv_frame_curr.M *
+//				slv_initial_orientation.Inverse() * cam_to_slv_rotation.Inverse() *  mstr_to_cam_rotation;
+//	}
+//	else{
+//		temp_slv_rot =
+//				mstr_to_slv_rotation_backup.Inverse() *
+//				_slv_frame_curr.M *
+//				slv_initial_orientation.Inverse() * mstr_to_slv_rotation_backup ;
+//	}
+//	return temp_slv_rot;
+//}
 
 //--------------------------------------------------------------------------------------------------
 // transformations from aster to slave
@@ -1558,13 +1594,16 @@ void teleop::setCam2SlaveRotation(KDL::Rotation in)
 {
 	available_cam_pose = true;
 	reorientation_done = false;
+	reorientation_first_run = true;
+
 	cam_to_slv_rotation = in;
 	mstr_to_slv_rotation = cam_to_slv_rotation * mstr_to_cam_rotation;
 
 	// slv_initial_orientation is the zero orientation zero of the slave. since it is desired to have the
 	// tool directed out of the display plane (i.e. along the +z of the camera)
-	// THen depending on the workspace other transformations should be added to be away from the joint limits
-	slv_initial_orientation = cam_to_slv_rotation * KDL::Rotation::RotZ(-M_PI/2);
+	// Then depending on the workspace other transformations should be added to stay away from the
+	// joint limits or get a different desired initial orientation
+	slv_initial_orientation = cam_to_slv_rotation * KDL::Rotation::RotX(M_PI/6)* KDL::Rotation::RotZ(-M_PI/2);
 };
 
 
@@ -1631,6 +1670,24 @@ geometry_msgs::Wrench teleop::getForceFeedback(KDL::Frame robot_pose, geometry_m
 }
 
 
+//---------------------------------------------------------------------------------------------
+// closeToSigmaWorkSpaceBoundary
+//---------------------------------------------------------------------------------------------
+bool teleop::isCloseToSigmaWorkSpaceBoundary(const KDL::Vector& _position){
+
+	// This transformation makes the comparison easier by aligning the workspace with the
+	// coordinate frame axes and shifting it to the center,
+	KDL::Vector position_transformed = sigma_workspace_tr * _position;
+
+	// The workspace can be approximated by a half sphere with radius 0.11m.
+	if (position_transformed[0]>0 && position_transformed.Norm() < 0.11)
+		return false;
+	else
+		return true;
+
+}
+
+
 //--------------------------------------------------------------------------------------------------
 // print out the parameters
 //--------------------------------------------------------------------------------------------------
@@ -1665,7 +1722,12 @@ void teleop::switchOrientationCoupling(const bool input){
 		return;
 	}
 	teleop_ori_coupled = input;
-	if(teleop_ori_coupled)	log(RTT::Info) << "The orientations of master and slave are coupled now." << endlog();
+
+	if(teleop_ori_coupled){
+		reorientation_done = false;
+		reorientation_first_run = true;
+		log(RTT::Info) << "The orientations of master and slave are coupled now." << endlog();
+	}
 	if(!teleop_ori_coupled)	log(RTT::Info) << "Uncoupled the orientations of master and slave" << endlog();
 }
 

@@ -15,6 +15,8 @@ sigma7::sigma7(std::string const& name) :
 	this->addPort("sigma_pedal", this->pedal_port).doc("Pedal port");
 	this->addEventPort("trigger", this->trigger).doc("Destination");
 	this->addPort("forceToMaster", this->force_to_master_port).doc("Readings of the pose from Sigma");
+	this->addPort("inputMasterWorkspaceAlert", this->port_input_mstr_ws_alert).doc("Readings of the pose from Sigma");
+
 
 	this->addOperation("usePedal", &sigma7::usePedal, this);
 	this->addProperty("rot_master_to_slave", 	master_to_base_frame_prop).doc("Rigid transformation from master to robot base.");
@@ -22,6 +24,8 @@ sigma7::sigma7(std::string const& name) :
 
 	//Initialize variables
 	this->use_pedal = 0;
+	this->workspace_alert = false;
+
 
 }
 //######################################################################################################
@@ -93,6 +97,11 @@ void sigma7::updateHook() {
 	if(this->force_to_master_port.read(this->tmp_wrench) == RTT::NewData)
 		this->mstr_wrench_cmd = this->tmp_wrench;
 
+	// read workspace alert port
+	if(this->port_input_mstr_ws_alert.read(this->bool_msg)== RTT::NewData)
+		this->workspace_alert = true;
+
+
 	//Applying force feedback if the pedal is engaged
 	if((this->sigma_pedal_state.data == 1)){
 		dhdEnableForce(DHD_ON);
@@ -103,8 +112,9 @@ void sigma7::updateHook() {
 		}
 		//		dhdGetOrientationRad(&lock_orientation[0], &lock_orientation[1],&lock_orientation[2]);
 	}
-	else
+	else{
 		this->lockOrientation();
+	}
 
 	this->master_pose_port.write(this->HI_pose);
 	this->master_twist_port.write(this->HI_twist);
@@ -119,6 +129,9 @@ void sigma7::updateHook() {
 
 }
 
+
+
+
 void sigma7::stopHook() {
 	Logger::In in(this->getName());
 
@@ -132,9 +145,15 @@ void sigma7::stopHook() {
 
 }
 
+
+
+
 void sigma7::cleanupHook() {
 
 }
+
+
+
 
 bool sigma7::initSigma() {
 	Logger::In in(this->getName());
@@ -186,18 +205,14 @@ bool sigma7::initSigma() {
 	dhdEmulateButton(DHD_ON);
 	return true;
 }
-/*
- * Using this macro, only one component may live
- * in one library *and* you may *not* link this library
- * with another component library. Use
- * ORO_CREATE_COMPONENT_TYPE()
- * ORO_LIST_COMPONENT_TYPE(sigma7)
- * In case you want to link with another library that
- * already contains components.
- *
- * If you have put your component class
- * in a namespace, don't forget to add it here too:
- */
+
+
+
+
+
+
+
+
 void sigma7::getFrame( double pos_array[], double orientation_matrix[][3], KDL::Frame& frame){
 	//Add: check sizes
 	frame.p[0] = pos_array[0];
@@ -210,6 +225,9 @@ void sigma7::getFrame( double pos_array[], double orientation_matrix[][3], KDL::
 	}
 }
 
+
+
+
 void sigma7::usePedal(bool input){
 	Logger::In in(this->getName());
 	if(this->use_pedal == input){
@@ -221,6 +239,8 @@ void sigma7::usePedal(bool input){
 	if(!this->use_pedal)	log(RTT::Info) << "Ok! Pedal will not be used." << endlog();
 
 }
+
+
 
 void sigma7::lockOrientation(){
 	geometry_msgs::Pose temp_pose;
@@ -242,12 +262,21 @@ void sigma7::lockOrientation(){
 				this->lock_orientation[1] =
 						this->lock_orientation[2] = 0.0;
 	}
+
+
+
+
 	// send the device to that orientation
-	drdRegulatePos  (false);
+	drdRegulatePos  (this->workspace_alert);
 	drdRegulateRot  (true);
 	drdRegulateGrip (false);
 	drdStart();
 	drdMoveToRot(this->lock_orientation[0], this->lock_orientation[1],this->lock_orientation[2]);
+	// if we are close to the workspace limits move to the center
+	if(this->workspace_alert){
+		drdMoveToPos(0.0, 0.0, 0.0);
+		this->workspace_alert = false;
+	}
 	drdStop(true);
 
 }

@@ -73,6 +73,8 @@ public:
 
 	void pointCloudToVector(const sensor_msgs::PointCloud2 & input, std::vector< std::vector<double> > &vecetor_out);
 	void closestPointToACPoints(double _tool_x, double _tool_y, double _tool_z, geometry_msgs::Pose & cp_pose_msg);
+	std_msgs::Float64 calculatePathLength();
+
 private:
 	geometry_msgs::Pose tool_current_pose_msg, tool_desired_pose_msg;
 	KDL::Vector tool_current_pos, tool_desired_pos;
@@ -91,9 +93,10 @@ private:
 protected:
 
 	// ports
-	RTT::InputPort<geometry_msgs::Pose> 					port_tool_pose_current;
-	RTT::OutputPort<geometry_msgs::Pose> 					port_tool_pose_desired;
-	RTT::InputPort<sensor_msgs::PointCloud2> 				port_ac_point_cloud;
+	RTT::InputPort<geometry_msgs::Pose> 			port_tool_pose_current;
+	RTT::OutputPort<geometry_msgs::Pose> 			port_tool_pose_desired;
+	RTT::InputPort<sensor_msgs::PointCloud2> 		port_ac_point_cloud;
+	RTT::OutputPort<std_msgs::Float64>				port_ac_path_length;
 };
 #endif
 

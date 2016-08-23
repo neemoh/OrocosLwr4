@@ -6,6 +6,8 @@
 #include "MyAPI/LWR4_Kinematics.hpp"
 #include "MyAPI/toolbox.hpp"
 #include "MyAPI/interpolator.cpp"
+#include <std_msgs/Bool.h>
+
 //#include "MyAPI/filter.h"
 
 #include <cmath>
@@ -167,6 +169,12 @@ public:
 	KDL::Frame calculateDesiredSlavePose(KDL::Frame slv_frame_curr, geometry_msgs::Pose master_msrd_pose);
 
 	//--------------------------------------------------------------------------------------------------
+	// Sigma Workspace Check
+	//--------------------------------------------------------------------------------------------------
+	// Checks whether the master's end-effector is (approximately) close to sigma's workspace
+	bool isCloseToSigmaWorkSpaceBoundary(const KDL::Vector& _position);
+
+	//--------------------------------------------------------------------------------------------------
 	// Print Parameters
 	//--------------------------------------------------------------------------------------------------
 	// print some parameters for debug
@@ -213,7 +221,7 @@ public:
 	KDL::Rotation mstr_to_tool_orient_rotation;
 	KDL::Rotation mstr_to_cam_rotation;
 	KDL::Rotation slv_initial_orientation;
-
+	KDL::Frame sigma_workspace_tr;
 	// teleop
 	bool 	clutch_first_time;
 	bool 	teleop_pos_coupled,teleop_ori_coupled;
@@ -387,6 +395,7 @@ public:
 	bool teleop_interpolate_done;
 	bool new_cart_dest;
 	bool tool_reorientation_done;
+	bool mstr_workspace_alert;
 	// some integers!
 	unsigned int motion_mode;
 	unsigned int num_cart_p_var, num_cart_vars;
@@ -436,6 +445,7 @@ public:
 	geometry_msgs::Pose tmp_pose_msg;
 	geometry_msgs::Twist tmp_twist;
 	geometry_msgs::Wrench tmp_wrench,  mstr_wrench_cmd;
+	std_msgs::Bool bool_msg;
 
 	// kinematics
 	LWR4Kinematics* kine;
@@ -479,6 +489,8 @@ protected:
 	RTT::OutputPort<geometry_msgs::Quaternion> 				master_to_slave_rot_port;
 	RTT::OutputPort<geometry_msgs::Pose> 					cart_FK_port;
 	RTT::OutputPort<geometry_msgs::Wrench>					force_to_master_port;
+	RTT::OutputPort<std_msgs::Bool>							port_out_mstr_ws_alert;
+
 //	RTT::InputPort<tFriKrlData> 							port_from_krl_master;
 //	RTT::OutputPort<tFriKrlData> 							port_to_krl_master;
 

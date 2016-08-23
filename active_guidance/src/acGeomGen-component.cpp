@@ -7,9 +7,10 @@ using namespace std;
 
 AcGeomGen::AcGeomGen(std::string const& name) : TaskContext(name){
 
-	this->addEventPort("tool_pose_current", this->port_tool_pose_current).doc("Reading the current pose of the tool");
-	this->addPort("tool_pose_desired", this->port_tool_pose_desired).doc("Writing the desired pose of the tool");
-	this->addPort("ac_point_cloud", this->port_ac_point_cloud).doc("Writing the desired pose of the tool");
+	this->addEventPort("inputToolPoseCurrent", this->port_tool_pose_current).doc("Reading the current pose of the tool");
+	this->addPort("outputToolPoseDesired", this->port_tool_pose_desired).doc("Writing the desired pose of the tool");
+	this->addPort("inputAcPointCloud", this->port_ac_point_cloud).doc("Writing the desired pose of the tool");
+	this->addPort("outputAcPathLength", this->port_ac_path_length).doc("Writing the desired pose of the tool");
 
 	this->addProperty("square_ac_info",	square_ac_info_prop).doc("Properties of the square constraint.");
 	this->addProperty("circle_ac_info",	circle_ac_info_prop).doc("Properties of the circle constraint.");
@@ -28,6 +29,8 @@ bool AcGeomGen::configureHook(){
 
 	// initialize port
 	this->port_tool_pose_desired.setDataSample(this->tool_current_pose_msg);
+	std_msgs::Float64 float_msg;
+	this->port_ac_path_length.setDataSample(float_msg);
 
 	std::cout << "AcGeomGen configured !" <<std::endl;
 	return true;
@@ -48,18 +51,25 @@ bool AcGeomGen::startHook(){
 // UPDATE HOOK
 //----------------------------------------------------------------------------------------------
 void AcGeomGen::updateHook(){
+	RTT::Logger::In in(this->getName());
 
 	// Reading data. Not checking for RTT::NewData
 	this->port_tool_pose_current.read(this->tool_current_pose_msg);
 
 	//
 	if(this->port_ac_point_cloud.read(this->ac_point_cloud) == RTT::NewData){
-		std::cout << "New ac point cloud received" << std::endl;
+
+		log(RTT::Info)<<  "New ac point cloud received." << RTT::endlog();
+
 		this->pointCloudToVector(this->ac_point_cloud, this->ac_points);
 
 		// flag
 		if(this->ac_points.size()>0)
 			this->ac_received = true;
+		this->port_ac_path_length.write(this->calculatePathLength());
+
+		// debug
+		log(RTT::Info)<< "Path length is: " << this->calculatePathLength().data << RTT::endlog();
 	}
 	//	poseMsgToPositionKDLVec(this->tool_current_pose_msg,this->tool_current_pos);
 	if (this->ac_received){
@@ -217,7 +227,11 @@ void acCircle::getClosestPoint(double tool_x, double tool_y, geometry_msgs::Pose
 }
 
 
+
 void AcGeomGen::pointCloudToVector(const sensor_msgs::PointCloud2 & input, std::vector< std::vector<double> > &vecetor_out){
+
+	while(vecetor_out.size()>0)
+		vecetor_out.pop_back();
 
 	size_t size = input.width * input.height;
 	int x_idx = getPointCloud2FieldIndex (input, "x");
@@ -272,6 +286,32 @@ void AcGeomGen::closestPointToACPoints(double _tool_x, double _tool_y, double _t
 	cp_pose_msg.position.z = ac_points[i_min][2];
 
 }
+
+
+
+//-----------------------------------------------------------------------
+// Calculate the length of the path (assuming all points are consecutive)
+//-----------------------------------------------------------------------
+std_msgs::Float64 AcGeomGen::calculatePathLength(){
+
+	// calculate the length of the path
+	double length = 0.0;
+	for(unsigned int i=1; i<ac_points.size() ; i++){
+		double dx = ac_points[i][0] - ac_points[i-1][0];
+		double dy = ac_points[i][1] - ac_points[i-1][1];
+		double dz = ac_points[i][2] - ac_points[i-1][2];
+
+		length += sqrt(dx*dx + dy*dy + dz*dz);
+	}
+
+	// output as float message
+	std_msgs::Float64 float_msg;
+	float_msg.data = length;
+	return float_msg;
+
+}
+
+
 /*
  * Using this macro, only one component may live
  * in one library *and* you may *not* link this library

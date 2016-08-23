@@ -41,8 +41,11 @@ class sigma7: public RTT::TaskContext {
 		std_msgs::Int8 sigma_button_previous_state;
 		std_msgs::Int8 sigma_pedal_state;
 		std_msgs::Int8 sigma_pedal_previous_state;
+		std_msgs::Bool bool_msg;
 		geometry_msgs::Wrench tmp_wrench, mstr_wrench_cmd;
 		bool use_pedal;
+		bool workspace_alert;
+
 		double lock_orientation[3];
 		KDL::Frame mstr_to_slv_frame,master_to_tool_orient_frame;
 
@@ -51,13 +54,15 @@ class sigma7: public RTT::TaskContext {
 
 		std::vector<double> master_to_base_frame_prop, master_to_tool_orient_frame_prop;
 
-		RTT::OutputPort<geometry_msgs::Pose> master_pose_port;
-		RTT::OutputPort<geometry_msgs::Twist> master_twist_port;
-		RTT::InputPort<geometry_msgs::Pose> slave_pose_port;
+		RTT::OutputPort<geometry_msgs::Pose> 	master_pose_port;
+		RTT::OutputPort<geometry_msgs::Twist> 	master_twist_port;
+		RTT::InputPort<geometry_msgs::Pose> 	slave_pose_port;
 		RTT::InputPort<sensor_msgs::JointState> trigger;
-		RTT::OutputPort<std_msgs::Int8> botton_port;
-		RTT::OutputPort<std_msgs::Int8> pedal_port;
-		RTT::InputPort<geometry_msgs::Wrench> force_to_master_port;
+		RTT::OutputPort<std_msgs::Int8> 		botton_port;
+		RTT::OutputPort<std_msgs::Int8> 		pedal_port;
+		RTT::InputPort<geometry_msgs::Wrench> 	force_to_master_port;
+		RTT::InputPort<std_msgs::Bool>			port_input_mstr_ws_alert;
+
 
 };
 #endif
