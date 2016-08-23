@@ -50,16 +50,32 @@ class taskPerformanceEval : public RTT::TaskContext{
     geometry_msgs::Pose des_pose_msg_in_slvrf;
 	KDL::Vector kdl_vec;
 
+	// error metrics
+	double error_sqrd_sum;
+	unsigned int rmse_counter;
+	double max_error;
+
+	double max_vel;
+	unsigned int cut_segments;
+	bool lost_contact_with_tissue;
+
+	double ac_length;
+	std_msgs::Float64 float_msg;
+
 	// clutching metric
 	unsigned long int num_clutchings;;
 
 	//Master metrics
+	bool ws_alert;
+	bool ws_alert_last;
 	unsigned long int ws_total_samples;
 	unsigned long int ws_boundary_samples;
 	KDL::Frame sigma_workspace_tr;
 	double mstr_tot_displacement;
 	KDL::Vector mstr_position;
 	KDL::Vector mstr_position_last;
+	bool clutch_engaged;
+	bool new_clutch_msg;
 
 	// time related variables
 	RTT::os::TimeService::ticks ticks_from_acq_start;
@@ -88,7 +104,7 @@ class taskPerformanceEval : public RTT::TaskContext{
 	RTT::InputPort<geometry_msgs::Twist> 		port_inp_twist_in_slv;
 	RTT::InputPort<std_msgs::Int8> 				port_inp_clutch;
 	RTT::InputPort<geometry_msgs::Wrench> 		port_inp_wrench;
-
+	RTT::InputPort<std_msgs::Float64>			port_inp_ac_length;
 
 
 
@@ -107,6 +123,7 @@ class taskPerformanceEval : public RTT::TaskContext{
 	// Sending the norms of error, velocity and force
 	RTT::OutputPort<geometry_msgs::Vector3Stamped> 	port_out_metrics1_downsmpl;
 	RTT::OutputPort<geometry_msgs::Vector3Stamped> 	port_out_metrics2_downsmpl;
+	RTT::OutputPort<geometry_msgs::PoseStamped> 	port_out_metrics_all;
 	// events
 	RTT::OutputPort<std_msgs::Char> 			port_out_events;
 };
