@@ -1,0 +1,5 @@
+uint8 skillclass
+float32 accuracy
+float32 motionconsistency
+float32 mstrworkspace
+float32 depthperception
