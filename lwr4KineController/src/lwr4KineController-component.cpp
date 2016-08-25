@@ -10,36 +10,39 @@ using namespace tf;
 
 lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(name, PreOperational){
 
-	this->addPort("outputJointPos", this->joint_command_port).doc("Readings of the pose from Sigma");
-	this->addPort("outputCartPose", this->cart_command_port).doc("Readings of the pose from Sigma");
-	this->addPort("outputCartPoseFK", this->cart_FK_port).doc("Readings of the pose from Sigma");
-	this->addPort("outputCartTwist", this->port_cart_twist).doc("Readings of the pose from Sigma");
-	this->addPort("outputMasterToSlaveTr", this->master_to_slave_rot_port).doc("Readings of the pose from Sigma");
+	this->addPort("outputJointPos", 			this->joint_command_port).doc("Readings of the pose from Sigma");
+	this->addPort("outputCartPose",				this->cart_command_port).doc("Readings of the pose from Sigma");
+	this->addPort("outputCartPoseFK", 			this->cart_FK_port).doc("Readings of the pose from Sigma");
+	this->addPort("outputCartTwist", 			this->port_cart_twist).doc("Readings of the pose from Sigma");
+	this->addPort("outputMasterToSlaveTr", 		this->master_to_slave_rot_port).doc("Readings of the pose from Sigma");
 	this->addPort("outputMasterWorkspaceAlert", this->port_out_mstr_ws_alert).doc("Readings of the pose from Sigma");
 
 	this->addEventPort("inputJointCurrent", this->joint_msrd_port).doc("Readings of the pose from PhanomOmni");
-	this->addPort("inputMasterPose", this->master_msrd_pose_port).doc("Output of the pose to Sigma");
-	this->addPort("inputSlaveCart", this->slave_cart_port).doc("Output of the pose to Sigma");
-	this->addPort("inputCamToSlavePose", this->cam_to_slave_pose_port).doc("Output of the pose to Sigma");
+	this->addPort("inputMasterPose", 		this->master_msrd_pose_port).doc("Output of the pose to Sigma");
+	this->addPort("inputSlaveCart", 		this->slave_cart_port).doc("Output of the pose to Sigma");
+	this->addPort("inputCamToSlavePose", 	this->cam_to_slave_pose_port).doc("Output of the pose to Sigma");
+	this->addPort("inputSkillProbs", 		this->skill_probs_port).doc("Readings of the pose from Sigma");
 
-	this->addPort("inputMasterClutch", this->master_clutch_port).doc("Output of the pose to Sigma");
-	this->addPort("forceToMaster", this->force_to_master_port).doc("Readings of the pose from Sigma");
-	this->addPort("forceFromSlave", this->force_from_slave_port).doc("Readings of the pose from Sigma");
+	this->addPort("inputMasterClutch", 		this->master_clutch_port).doc("Output of the pose to Sigma");
+	this->addPort("forceToMaster", 			this->force_to_master_port).doc("Readings of the pose from Sigma");
+	this->addPort("forceFromSlave", 		this->force_from_slave_port).doc("Readings of the pose from Sigma");
+
 
 //	this->addPort("toKRL_master", this->port_to_krl_master).doc("Commands Port to KRC");
 //	this->addPort("fromKRL_master", this->port_from_krl_master).doc("Status Port from KRC");
 
-	this->addProperty("motion_mode", motion_mode_prop).doc("type of motion: 1 for point to point, 2 for tracking");
-	this->addProperty("force_feedback_on", force_feedback_on_prop).doc("Home joint positions]");
-	this->addProperty("force_filter_on", force_filter_on_prop).doc("Home joint positions]");
-	this->addProperty("teleop_pos_coupled", teleop_pos_coupled_prop).doc("Coupling the position of master and slave");
-	this->addProperty("teleop_ori_coupled", teleop_ori_coupled_prop).doc("Coupling the orientation of master and slave");
+	this->addProperty("motion_mode", 		this->motion_mode_prop).doc("type of motion: 1 for point to point, 2 for tracking");
+	this->addProperty("force_feedback_on", 	this->force_feedback_on_prop).doc("Home joint positions]");
+	this->addProperty("force_filter_on", 	this->force_filter_on_prop).doc("Home joint positions]");
+	this->addProperty("teleop_pos_coupled", this->teleop_pos_coupled_prop).doc("Coupling the position of master and slave");
+	this->addProperty("teleop_ori_coupled", this->teleop_ori_coupled_prop).doc("Coupling the orientation of master and slave");
+	this->addProperty("mstr_ws_helper", 	this->mstr_ws_helper_prop).doc("Coupling the orientation of master and slave");
 
-	this->addProperty("force_scale", force_scale_prop).doc("Home joint positions]");
-	this->addProperty("translation_scale", transl_scale_prop).doc("scale of translation");
-	this->addProperty("tool_to_ee_tr", tool_to_ee_tr_prop).doc("Rigid transformation from the tool to the end-effector.");
-	this->addProperty("master_orientation_average_steps", 	rpy_avg_n_prop).doc("The number of averaging steps for the orientation (rpy) of the master device.");
-	this->addProperty("master_position_average_steps", 		pos_avg_n_prop).doc("The number of averaging steps for the position (xyz) of the master device.");
+	this->addProperty("force_scale", 		this->force_scale_prop).doc("Home joint positions]");
+	this->addProperty("translation_scale",  this->transl_scale_prop).doc("scale of translation");
+	this->addProperty("tool_to_ee_tr", 		this->tool_to_ee_tr_prop).doc("Rigid transformation from the tool to the end-effector.");
+	this->addProperty("master_orientation_average_steps", 	this->rpy_avg_n_prop).doc("The number of averaging steps for the orientation (rpy) of the master device.");
+	this->addProperty("master_position_average_steps", 		this->pos_avg_n_prop).doc("The number of averaging steps for the position (xyz) of the master device.");
 
 	this->addProperty("time_period", 				this->period_prop).doc("The constant time period used for interpolation");
 	this->addProperty("max_joint_vars", 			this->slv_jnt_q_max_prop).doc("Maximum limit [measurement_unit]");
@@ -56,7 +59,6 @@ lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(na
 	this->addProperty("rot_master_to_slave", 		this->mstr_to_slv_rotation_prop).doc("Rigid transformation from master to robot base. Used when master to Cam rotation is not available");
 	this->addProperty("rot_master_to_cam", 			this->mstr_to_cam_rotation_prop).doc("Rigid transformation from master to camera (display).");
 
-
 	this->addProperty("palpation_home_3dpose", 	    this->palpation_home_3dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 	this->addProperty("palpation_init_3dpose", 	    this->palpation_init_3dpose_prop).doc("Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order).");
 
@@ -72,6 +74,7 @@ lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(na
 	this->addOperation("forceFilterSwitch", 		&lwr4KineController::switchForceFilter, 		this).doc("Switches force filter on->off and vice versa");
 	this->addOperation("switchPositionCoupling", 	&lwr4KineController::switchPositionCoupling, 	this).doc("Switches the master/slave coupling of position. On or Off");
 	this->addOperation("switchOrientationCoupling",	&lwr4KineController::switchOrientationCoupling,	this).doc("Switches the master/slave coupling of orientation. On or Off");
+	this->addOperation("switchMasterWSHelper",		&lwr4KineController::switchMasterWSHelper,		this).doc("Switches the master/slave coupling of orientation. On or Off");
 	this->addOperation("setOrientationAvgWindow",	&lwr4KineController::setOrientationAvgWindow,	this).doc("Switches the master/slave coupling of orientation. On or Off");
 	this->addOperation("updateCam2SlavePose",		&lwr4KineController::updateCam2SlavePose,		this).doc("Updates the transformation between the camera and the slaveor Off");
 
@@ -92,6 +95,7 @@ lwr4KineController::lwr4KineController(std::string const& name) : TaskContext(na
 	this->new_cart_dest 			= false;
 	this->force_filter_on			= false;
 	this->mstr_workspace_alert 		= false;
+	this->mstr_ws_helper_on			= false;
 
 	std::cout << "lwr4KineController constructed!" <<std::endl;
 }
@@ -288,6 +292,10 @@ void lwr4KineController::updateHook(){
 	//Reading the haptic device's clutch state
 	if(this->master_clutch_port.connected())
 		this->master_clutch_port.read(this->master_clutch);
+
+	// reading the skill probabilities of the user. used in tele-op.
+	if(this->skill_probs_port.connected() && this->skill_probs_port.read(this->skill_prob_msg) == RTT::NewData)
+		this->mstr_ws_helper_on = bool(1 - this->skill_prob_msg.skillclass); // skillclass-> 1:expert, 0: novice
 
 	//
 	//--------------------------------------------------------------------------------------------------
@@ -487,8 +495,9 @@ void lwr4KineController::updateHook(){
 			else { //If the clutch is released
 				this->to->clutch_first_time = true;
 				this->destination_reached = true;
+
 				// if the workspace alarm was set, tell Sigma to go to it's center
-				if(this->mstr_workspace_alert){
+				if(this->mstr_workspace_alert && this->mstr_ws_helper_on){
 					this->bool_msg.data = true;
 					this->port_out_mstr_ws_alert.write(this->bool_msg);
 					this->mstr_workspace_alert = false;
@@ -1730,7 +1739,6 @@ void teleop::switchOrientationCoupling(const bool input){
 	}
 	if(!teleop_ori_coupled)	log(RTT::Info) << "Uncoupled the orientations of master and slave" << endlog();
 }
-
 
 
 

@@ -16,6 +16,7 @@
 #include <kuka_lwr_fri/friComm.h>
 #include <kuka_lwr_fri/typekit/Types.hpp>
 #include <lwr_fri/typekit/Types.hpp>
+#include <active_guidance/skillProbabilities.h>
 
 struct filter {
 	double inp1, inp2, inp3;
@@ -315,6 +316,15 @@ public:
 	void switchPositionCoupling(const bool in){to->switchPositionCoupling(in);};
 
 	//-------------------------------------------------------------------------------------
+	// Master workspace helper
+	//-------------------------------------------------------------------------------------
+	// For very novice users, this helper brings the master device to its center when
+	// the user reaches the boundaries of the master workspace. This works only when
+	// the user is close to the boundary AND releases the clutch.
+	void switchMasterWSHelper(const bool in){this->mstr_ws_helper_on = in;};
+
+
+	//-------------------------------------------------------------------------------------
 	// Changing the length of the averaging
 	//-------------------------------------------------------------------------------------
 	void setOrientationAvgWindow(const unsigned int in){	to->setOrientationAvgWindow(in); cout<<"OK!"<<endl;};
@@ -396,6 +406,8 @@ public:
 	bool new_cart_dest;
 	bool tool_reorientation_done;
 	bool mstr_workspace_alert;
+	bool mstr_ws_helper_on;
+
 	// some integers!
 	unsigned int motion_mode;
 	unsigned int num_cart_p_var, num_cart_vars;
@@ -446,7 +458,7 @@ public:
 	geometry_msgs::Twist tmp_twist;
 	geometry_msgs::Wrench tmp_wrench,  mstr_wrench_cmd;
 	std_msgs::Bool bool_msg;
-
+	active_guidance::skillProbabilities skill_prob_msg;
 	// kinematics
 	LWR4Kinematics* kine;
 	std::vector<std::vector<double> > dh;
@@ -462,6 +474,7 @@ protected:
 	bool force_feedback_on_prop;
 	bool force_filter_on_prop;
 	bool teleop_pos_coupled_prop, teleop_ori_coupled_prop;
+	bool mstr_ws_helper_prop;
 	double period_prop;
 	double force_scale_prop;
 	double transl_scale_prop;
@@ -495,6 +508,7 @@ protected:
 //	RTT::OutputPort<tFriKrlData> 							port_to_krl_master;
 
 	RTT::InputPort<geometry_msgs::Pose> 					slave_cart_port;
+	RTT::InputPort<active_guidance::skillProbabilities>		skill_probs_port; 					cam_to_slave_pose_port;
 
 };
 

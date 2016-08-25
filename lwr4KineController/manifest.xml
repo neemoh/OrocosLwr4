@@ -12,7 +12,8 @@
 	<depend package="kdl"/>
 	<depend package="tf_conversions" />
         <depend package="kuka_lwr_fri"/>
-        <depend package="lwr_fri"/>
+        <depend package="lwr_fri"/>        
+	<depend package="active_guidance"/>
 
 </package>
 
