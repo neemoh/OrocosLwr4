@@ -81,7 +81,7 @@ bool taskPerformanceEval::configureHook(){
 	this->port_out_clutch_stamped.setDataSample(this->point_stamped_msg);
 	this->port_out_metrics1_downsmpl.setDataSample(this->vec3_stamped_msg);
 	this->port_out_metrics2_downsmpl.setDataSample(this->vec3_stamped_msg);
-	this->port_out_metrics_all.setDataSample(this->pose_stamped_msg);
+	this->port_out_metrics_all.setDataSample(this->perf_metrics_msg);
 	this->port_out_events.setDataSample(this->char_msg);
 
 
@@ -134,6 +134,7 @@ void taskPerformanceEval::updateHook(){
 
 	// check if the user is close to sigma's ws limit
 	this->ws_alert = this->isCloseToSigmaWorkSpaceBoundary(this->mstr_position);
+
 	// if workspace alert changes send a message ------------------------
 	if(this->ws_alert != this->ws_alert_last ){
 
@@ -433,20 +434,19 @@ void taskPerformanceEval::endAcquisition(){
 		// write on port
 		this->port_out_metrics2_downsmpl.write(this->vec3_stamped_msg);
 
-		// out of laziness using a pose message to publish the metrics
-		// last three metrics are scaled based on the length of the path.
-		this->writeTimeStamp(this->ac_length, this->pose_stamped_msg);
-		this->pose_stamped_msg.pose.position.x 		= rmse;
-		this->pose_stamped_msg.pose.position.y 		= this->max_error;
-		this->pose_stamped_msg.pose.position.z 		= this->max_vel;
-		this->pose_stamped_msg.pose.orientation.x 	= ws_boundary_ratio;
-		this->pose_stamped_msg.pose.orientation.y	= this->mstr_tot_displacement  ;
-		this->pose_stamped_msg.pose.orientation.z 	= this->cut_segments  ;
-		this->pose_stamped_msg.pose.orientation.w 	= elapsed_time  ;
-
+		// using a custom message to publish the metrics
+		// last three metrics will be scaled based on the length of the path so the length is also sent.
+		this->perf_metrics_msg.rmse 		= rmse;
+		this->perf_metrics_msg.maxerror		= this->max_error;
+		this->perf_metrics_msg.maxvel 		= this->max_vel;
+		this->perf_metrics_msg.ws 			= ws_boundary_ratio;
+		this->perf_metrics_msg.totdisp		= this->mstr_tot_displacement  ;
+		this->perf_metrics_msg.numsegs 		= this->cut_segments ;
+		this->perf_metrics_msg.time 		= elapsed_time;
+		this->perf_metrics_msg.acpathlength	= this->ac_length;
 
 		// write on port
-		this->port_out_metrics_all.write(this->pose_stamped_msg);
+		this->port_out_metrics_all.write(this->perf_metrics_msg);
 
 	}
 }

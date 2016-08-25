@@ -16,7 +16,6 @@ AcGeomGen::AcGeomGen(std::string const& name) : TaskContext(name){
 	this->addProperty("circle_ac_info",	circle_ac_info_prop).doc("Properties of the circle constraint.");
 
 	this->ac_received = false;
-
 	ac_geometry = 1;
 	std::cout << "AcGeomGen constructed !" <<std::endl;
 }

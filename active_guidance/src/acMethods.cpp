@@ -140,7 +140,7 @@ void acPlastRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, co
 	double theta = 0.4;
 	double sig0 = fc/ELASTIC_LENGTH;
 	double zcss = fc/sig0;
-	KDL::Vector penet = p_tool - p_desired;
+	KDL::Vector penet = p_tool - p_desired ;
 
 	// boundary condition
 	double ptrans = BOUNDARY_THRESHOLD;
@@ -202,11 +202,12 @@ acViscousRedirect::acViscousRedirect(double F_MAX_in, double B_MAX_in, double BO
 //-----------------------------------------------------------------------
 
 void acViscousRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, const KDL::Vector p_desired, const KDL::Vector v_msrd){
+
 	// UPPERCASE NAMES = SCALARS
 	// LOWERCASE NAMES = VECTORS
 
 	KDL::Vector penet = p_desired - p_tool;
-	double F_VC, F_VC_SAT, V_TOOL;
+	double F_VC, F_VC_SAT;
 	double B_M			= B_MAX;
 
 	KDL::Vector  f_dir, penet_dir, v_tool_dir;
@@ -220,31 +221,39 @@ void acViscousRedirect::getForce(KDL::Vector &f_out,  const KDL::Vector p_tool, 
 	double V_PENET_DOTP = dot(v_tool_dir, penet_dir);
 	double PENET =vec_norm(penet);
 
+	// limit the viscous coefficient around the boundary to minimize the oscillation
 	if (PENET< BOUNDARY_THRESHOLD){
 		B_M =  B_MAX * PENET/ BOUNDARY_THRESHOLD;
 	}
 	else
 		B_M = B_MAX;
 
-	V_TOOL = vec_norm( v_msrd );
-	F_VC = B_M * sqrt( ( 1 - V_PENET_DOTP ) / 2 ) * V_TOOL;
+	// calculate the magnitude of the ac force
+	F_VC = B_M * sqrt( ( 1 - V_PENET_DOTP ) / 2 ) * v_msrd.Norm();
 
+	// saturate the magnitude of the ac force
+	F_VC_SAT = saturate(0.0, F_VC , F_MAX );
+
+	//-----------------------------------------------------------------------
+	// calculate the direction of the AC force
 	KDL::Vector n = v_tool_dir * penet_dir;
 	KDL::Vector nn = n;
 	normalizeSafe(nn, penet_dir);
 
+	double THETA = (M_PI/2) * (1 + V_PENET_DOTP);
+
 	if ( V_PENET_DOTP < 0.0 )
 		f_dir = penet_dir;
-	KDL::Vector n_2 = f_dir_last * f_dir;
+	else
+		if(rotateVector(v_tool_dir, f_dir, nn, THETA) < 0)
+			std::cout << "Null in rotateVector." <<"  norm(v_tool_dir) = "<< v_tool_dir.Norm()<<
+			"  , norm(nn) = "<< nn.Norm() << std::endl;
 
-	normalizeSafe(n_2, n_2_last);
-
-	F_VC_SAT = saturate(-F_MAX, F_VC , F_MAX );
+	//-----------------------------------------------------------------------
+	// Make the force vector from the calculated magnitude and direction
 	f_out = F_VC_SAT * f_dir;
 
 	v_dir_last = v_tool_dir;
-	f_dir_last = f_dir;
-	n_2_last = n_2;
 
 }
 

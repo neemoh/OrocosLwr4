@@ -7,6 +7,7 @@
 #include <std_msgs/typekit/Types.hpp>
 #include <kdl/frames.hpp>
 #include <tf_conversions/tf_kdl.h>
+#include <active_guidance/perfmetrics.h>
 //#include <rtt/Time.hpp>
 
 class taskPerformanceEval : public RTT::TaskContext{
@@ -89,6 +90,7 @@ class taskPerformanceEval : public RTT::TaskContext{
     geometry_msgs::Wrench wrench_msg;
     std_msgs::Int8 int8_msg;
     geometry_msgs::PointStamped point_stamped_msg;
+	active_guidance::perfmetrics perf_metrics_msg;
 
     geometry_msgs::Vector3Stamped vec3_stamped_msg;
 	std_msgs::Char char_msg;
@@ -123,7 +125,7 @@ class taskPerformanceEval : public RTT::TaskContext{
 	// Sending the norms of error, velocity and force
 	RTT::OutputPort<geometry_msgs::Vector3Stamped> 	port_out_metrics1_downsmpl;
 	RTT::OutputPort<geometry_msgs::Vector3Stamped> 	port_out_metrics2_downsmpl;
-	RTT::OutputPort<geometry_msgs::PoseStamped> 	port_out_metrics_all;
+	RTT::OutputPort<active_guidance::perfmetrics> 	port_out_metrics_all;
 	// events
 	RTT::OutputPort<std_msgs::Char> 			port_out_events;
 };
