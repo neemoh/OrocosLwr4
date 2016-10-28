@@ -508,7 +508,7 @@ protected:
 //	RTT::OutputPort<tFriKrlData> 							port_to_krl_master;
 
 	RTT::InputPort<geometry_msgs::Pose> 					slave_cart_port;
-	RTT::InputPort<active_guidance::skillProbabilities>		skill_probs_port; 					cam_to_slave_pose_port;
+	RTT::InputPort<active_guidance::skillProbabilities>		skill_probs_port;
 
 };
 

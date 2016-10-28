@@ -294,8 +294,10 @@ void lwr4KineController::updateHook(){
 		this->master_clutch_port.read(this->master_clutch);
 
 	// reading the skill probabilities of the user. used in tele-op.
-	if(this->skill_probs_port.connected() && this->skill_probs_port.read(this->skill_prob_msg) == RTT::NewData)
-		this->mstr_ws_helper_on = bool(1 - this->skill_prob_msg.skillclass); // skillclass-> 1:expert, 0: novice
+	if(this->skill_probs_port.connected() && this->skill_probs_port.read(this->skill_prob_msg) == RTT::NewData){
+		this->mstr_ws_helper_on = 1 - int(this->skill_prob_msg.mstrworkspace + 0.5); // mstrworkspace-> 1:expert, 0: novice
+		log(RTT::Info)<< "Received user profile. Set the workspace helper as: " << this->mstr_ws_helper_on << endlog();
+	}
 
 	//
 	//--------------------------------------------------------------------------------------------------
@@ -1456,8 +1458,8 @@ KDL::Frame teleop::calculateDesiredSlavePose(KDL::Frame _slv_frame_curr, geometr
 		slv_frame_init = _slv_frame_curr;
 
 		// Initial filtering duration
-		first_engagement_counter_rpy = 2 * 1/dt_param;// seconds first engagement integration;
-		first_engagement_counter_pos = 0.5 * 1/dt_param;// seconds first engagement integration;
+		first_engagement_counter_rpy = 1 * 1/dt_param;// seconds first engagement integration;
+		first_engagement_counter_pos = 0.2 * 1/dt_param;// seconds first engagement integration;
 
 		// Setting the initial value for the averaging of the orientation as that of the slave taken in
 		// master's ref frame since the master may move a bit when the clutch is not engaged, it is safer to start
