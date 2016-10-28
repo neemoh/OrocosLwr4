@@ -24,6 +24,10 @@
 	</simple>
 	<simple name="teleop_ori_coupled" type="long">
 		<description>master slave orientation coupling</description>
+		<value>0</value>
+	</simple>
+	<simple name="mstr_ws_helper" type="long">
+		<description>master slave orientation coupling</description>
 		<value>1</value>
 	</simple>
 	<simple name="force_scale" type="double">
@@ -32,13 +36,9 @@
 	</simple>
 	<simple name="translation_scale" type="double">
 		<description>translation Scale</description>
-		<value>0.7</value>
+		<value>0.5</value>
 	</simple>
-	<simple name="tool_zlength" type="double">
-		<description>distance of the tool tip in z direction from the flange</description>
-		<value>0.21375</value>
-	</simple>
-<!--	<simple name="tool_zlength" type="double"><description>distance of the tool tip in z direction from the flange</description><value>0.202932</value></simple>-->
+
 	<simple name="master_orientation_average_steps" type="double">
 		<description>N average points</description>
 		<value>50</value>
@@ -48,33 +48,58 @@
 		<value>10</value>
 	</simple>
 
-	<struct name="tr_master_to_base" type="array">
-		<description>Rigid transformation (quaternion) from master to robot's base. (Attention to x,y,z,w order)</description>
+	<struct name="tool_to_ee_tr" type="array">
+		<description>Transformation (x, y, z, qx, qy, qz, qw) from the tool to the end-effector.</description>
+		<simple name="Element0" type="double"><description>x</description><value> -0.0013</value></simple>
+		<simple name="Element1" type="double"><description>y</description><value>  0.0028</value></simple>
+		<simple name="Element2" type="double"><description>z</description><value>  0.2152</value></simple> 
+		<simple name="Element3" type="double"><description>qx</description><value> 0.0</value></simple>
+		<simple name="Element4" type="double"><description>qy</description><value> 0.0</value></simple>
+		<simple name="Element5" type="double"><description>qz</description><value> 0.0</value></simple>
+		<simple name="Element6" type="double"><description>qw</description><value> 0.1</value></simple> 
+	</struct>
+
+	<struct name="rot_master_to_slave" type="array">
+		<description>Rigid transformation (quaternion) from master to robot's base. Used only when the camera to robot pose topic is not available. (Attention to x,y,z,w order)</description>
 		<!-- Current transformation is a rotation of +pi/2 around z -->
 		<simple name="Element0" type="double"><description>qx</description><value> 0.0</value></simple>
 		<simple name="Element1" type="double"><description>qy</description><value> 0.0</value></simple>
 		<simple name="Element2" type="double"><description>qz</description><value> 0.7071</value></simple>
-		<simple name="Element3" type="double"><description>qw</description><value> 0.7071</value></simple>
+		<simple name="Element3" type="double"><description>qw</description><value> 0.7071</value></simple> 
 	</struct>
 
+	<struct name="rot_master_to_cam" type="array">
+		<description>Rotation (quaternion) from master to the camera, that is to the view point of the camera (the monitor). This will be used with the camera_to_robot rotation (published by the vision node) to construct the master_to_slave rotation </description>
+		<!-- Current transformation is a rotation of +pi/2 around z -->
+		<simple name="Element0" type="double"><description>qx</description><value> 0.5</value></simple>
+		<simple name="Element1" type="double"><description>qy</description><value> 0.5</value></simple>
+		<simple name="Element2" type="double"><description>qz</description><value>-0.5</value></simple>
+		<simple name="Element3" type="double"><description>qw</description><value> 0.5</value></simple> 
+	</struct>
 	<struct name="tr_fs_to_ee" type="array">
-		<description>Rigid transformation (quaternion) from force sensor to the endeffector. (Attention to x,y,z,w order) </description>
+		<description>Rotation (quaternion) from force sensor to the endeffector. (Attention to x,y,z,w order) </description>
 		<simple name="Element0" type="double"><description>qx</description><value>-0.0105</value></simple>
 		<simple name="Element1" type="double"><description>qy</description><value> 0.0235</value></simple>
 		<simple name="Element2" type="double"><description>qz</description><value> 0.1025</value></simple>
 		<simple name="Element3" type="double"><description>qw</description><value> 0.9944</value></simple>
 	</struct>
 
-	<struct name="tr_master_to_tool_orient" type="array">
-		<description>Rigid transformation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order) </description>
+	<struct name="rot_master_to_tool_orient" type="array">
+		<description>Rotation (quaternion) to achieve the desired orientation between the master handle and the slave tool. (Attention to x,y,z,w order) </description>
 	<!--	<simple name="Element0" type="double"><description>qx</description><value> 0.0</value></simple>
 		<simple name="Element1" type="double"><description>qy</description><value>-0.7071</value></simple>
 		<simple name="Element2" type="double"><description>qz</description><value> 0.0</value></simple>
 		<simple name="Element3" type="double"><description>qw</description><value> 0.7071</value></simple>
-	-->	<simple name="Element0" type="double"><description>qx</description><value>-1.0</value></simple>
+		<simple name="Element0" type="double"><description>qx</description><value>-1.0</value></simple>
 		<simple name="Element1" type="double"><description>qy</description><value> 0.0</value></simple>
 		<simple name="Element2" type="double"><description>qz</description><value> 0.0</value></simple>
-		<simple name="Element3" type="double"><description>qw</description><value> 0.0</value></simple>	</struct>
+		<simple name="Element3" type="double"><description>qw</description><value> 0.0</value></simple>
+	-->	<simple name="Element0" type="double"><description>qx</description><value>-0.0</value></simple>
+		<simple name="Element1" type="double"><description>qy</description><value> 0.0</value></simple>
+		<simple name="Element2" type="double"><description>qz</description><value> 0.0</value></simple>
+		<simple name="Element3" type="double"><description>qw</description><value> 1.0</value></simple>
+	</struct>
+
 	<struct name="slv_home_joint" type="array">
 		<description>Home joint configuration</description>
 		<simple name="Element0" type="double"><description>j 1</description><value> 2.0</value></simple>
@@ -163,4 +188,6 @@
 		<simple name="Element4" type="double"><description>Angular acc p</description><value>0.30</value></simple>
 		<simple name="Element5" type="double"><description>Angular acc y</description><value>0.30</value></simple>
 	</struct>
+
+
 </properties>

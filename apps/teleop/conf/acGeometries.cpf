@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "cpf.dtd">
+<!-- Properties of the Position-Generator component -->
+<properties>
+<!--	<simple name="time_period" type="double"><description>frame rate</description><value>0.001</value></simple>
+-->
+	<struct name="square_ac_info" type="array">
+		<description>properites of the square ac</description>
+		<simple name="Element0" type="double"><description>center_x</description><value>-0.445413</value></simple>
+		<simple name="Element1" type="double"><description>center_y</description><value> 0.268587</value></simple>
+		<simple name="Element2" type="double"><description>center_z</description><value> 0.244369</value></simple>
+		<simple name="Element3" type="double"><description>width(dx)</description><value>0.01</value></simple>
+		<simple name="Element4" type="double"><description>height(dy)</description><value>0.01</value></simple>
+
+	</struct>
+	<struct name="circle_ac_info" type="array">
+		<description>Properties of the circle ac</description>
+		<simple name="Element0" type="double"><description>center_x</description><value>-0.445413</value></simple>
+		<simple name="Element1" type="double"><description>center_y</description><value> 0.268587</value></simple>
+		<simple name="Element2" type="double"><description>center_z</description><value> 0.244369</value></simple>
+		<simple name="Element3" type="double"><description>radious</description><value> 0.007</value></simple>
+	</struct>	
+
+

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "cpf.dtd">
+<!-- Properties of the Position-Generator component -->
+<properties>
+	<simple name="acMode" type="long">
+		<description>active constraint mode: 0:free, 1: plastic, 2: plastic+redirection, 3:viscouse+redirection, 4: (visco)elastic</description>
+		<value>3</value>
+	</simple>
+
+	<simple name="acFMAX" type="long">
+		<description>active constarint maximum force </description>
+		<value>0.0</value>
+	</simple>
+
+	<struct name="isoViscParams" type="array">
+		<description>parameters for the penetration avoidance force</description>
+		<simple name="Element0" type="double"><description>FMAX</description><value> 0.0</value></simple>
+		<simple name="Element1" type="double"><description>B: viscous coeff</description><value>  20.0</value></simple>
+	</struct>
+
+	<struct name="penetAvoidParams" type="array">
+		<description>parameters for the penetration avoidance force</description>
+		<simple name="Element0" type="double"><description>FMAX</description><value> 0.0</value></simple>
+		<simple name="Element1" type="double"><description>K: elastic coeff</description><value> 400.0</value></simple>
+		<simple name="Element2" type="double"><description>B: viscous coeff</description><value> 5.0</value></simple> 
+	</struct>
+
+	<simple name="visionDownsmplRatio" type="long">
+		<description>frame rate</description>
+		<value>8</value>
+	</simple>
+	<simple name="recordingDownsmplRatio" type="long">
+		<description>frame rate</description>
+		<value>4</value>
+	</simple>
+
+
+</properties>
